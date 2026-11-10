@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Plus Jakarta Sans";
+  src: url("/fonts/jakarta-latin.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-latin.woff2") format("woff2");
+  font-weight: 500 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --color-primary: #8a000a;
+  --color-primary-bright: #b31217;
+  --color-maroon: #2b070d;
+  --color-maroon-deep: #1c0408;
+  --color-brass: #c9a227;
+  --color-brass-soft: #e6c86a;
+  --color-surface: #f5f2ee;
+  --color-ink: #211a17;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+button {
+  transition: transform 0.12s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+button:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brass);
+  outline-offset: 2px;
+}
+
+.kr-shell {
+  background: linear-gradient(180deg, #2b070d 0%, #1c0408 100%);
+}
+
+.kr-page {
+  animation: kr-fade-up 0.35s ease both;
+}
+
+@keyframes kr-fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes kr-zoom { from { opacity: 0; transform: scale(0.82); } to { opacity: 1; transform: scale(1); } }
+@keyframes kr-slide-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes kr-slide-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes kr-intro-out { to { opacity: 0; visibility: hidden; } }
+@keyframes kr-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.25); } 50% { box-shadow: 0 0 0 14px rgba(255, 255, 255, 0); } }
+
+.kr-fade-up { animation: kr-fade-up 0.6s ease both; }
+.kr-zoom { animation: kr-zoom 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.kr-slide-left { animation: kr-slide-left 0.7s ease both; }
+.kr-slide-right { animation: kr-slide-right 0.7s ease both; }
+.kr-intro { animation: kr-intro-out 0.5s ease 1.4s forwards; }
+.kr-glow { animation: kr-glow 1.6s ease infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

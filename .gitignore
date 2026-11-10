@@ -1,0 +1,7 @@
+node_modules
+dist
+*.local
+.env
+.env.*
+build.log
+kedai-rakdjat-backup-*.json
