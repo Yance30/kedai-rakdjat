@@ -2,7 +2,9 @@
 
 **Local-first point of sale for a real Indonesian kedai** — built for an Android tablet cashier, with cloud monitoring for the owner and a kitchen display system. Works fully offline; syncs to Supabase when a connection is available.
 
-![Kedai Rakdjat](public/login-bg.png)
+![Layar kasir Kedai Rakdjat POS](docs/screenshot-kasir.png)
+
+![Dashboard owner dengan grafik pemasukan](docs/screenshot-dashboard.png)
 
 ## Highlights
 
