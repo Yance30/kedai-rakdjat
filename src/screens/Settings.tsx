@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, hashPin } from '../db';
+import { db } from '../db';
+import { changePin } from '../auth';
+import { createBackup, downloadBackup, parseBackup, restoreBackup } from '../backup';
+import CloudAccess from '../components/CloudAccess';
+import Diagnostics from '../components/Diagnostics';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
@@ -47,7 +51,7 @@ export default function Settings({ staff }: { staff: Staff }) {
 
   async function saveProduct() {
     const price = Number(form.price);
-    if (!form.name.trim() || !(price > 0)) {
+    if (!form.name.trim() || (!Number.isSafeInteger(price) || price <= 0)) {
       setMsg('Nama menu dan harga (> 0) wajib diisi.');
       return;
     }
@@ -65,42 +69,17 @@ export default function Settings({ staff }: { staff: Staff }) {
   }
 
   async function exportBackup() {
-    const data = {
-      staff: await db.staff.toArray(),
-      shifts: await db.shifts.toArray(),
-      products: await db.products.toArray(),
-      orders: await db.orders.toArray(),
-      orderItems: await db.orderItems.toArray(),
-      payments: await db.payments.toArray(),
-      settings: await db.settings.toArray(),
-      tables: await db.meja.toArray(),
-    };
-    const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `kedai-rakdjat-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setMsg('Backup diunduh.');
+    try { downloadBackup(await createBackup()); await db.settings.put({key:'last_backup_download',value:String(Date.now())}); setMsg('Backup diunduh. Simpan di tempat aman karena memuat data usaha dan hash PIN.'); }
+    catch (e) { setMsg((e as Error).message); }
   }
-
   async function importBackup(file: File) {
-    const data = JSON.parse(await file.text());
-    if (!confirm('Import akan MENGGANTI seluruh data saat ini. Lanjutkan?')) return;
-    await db.transaction('rw', [db.staff, db.shifts, db.products, db.orders, db.orderItems, db.payments, db.settings, db.meja], async () => {
-      await Promise.all([db.staff, db.shifts, db.products, db.orders, db.orderItems, db.payments, db.settings, db.meja].map((t) => t.clear()));
-      await db.staff.bulkAdd(data.staff ?? []);
-      await db.shifts.bulkAdd(data.shifts ?? []);
-      await db.products.bulkAdd(data.products ?? []);
-      await db.orders.bulkAdd(data.orders ?? []);
-      await db.orderItems.bulkAdd(data.orderItems ?? []);
-      await db.payments.bulkAdd(data.payments ?? []);
-      await db.settings.bulkAdd(data.settings ?? []);
-      await db.meja.bulkAdd(
-        data.tables ?? Array.from({ length: 8 }, (_, i) => ({ name: `T-0${i + 1}`, status: 'available' as const })),
-      );
-    });
-    setMsg('Import berhasil. Data diganti dari backup.');
+    try {
+      if (file.size > 30_000_000) throw new Error('File melebihi 30 MB.');
+      const backup = parseBackup(await file.text());
+      if (!confirm('File valid: ' + backup.data.orders.length + ' pesanan. Data akan diganti dan salinan pemulihan disimpan. Lanjutkan?')) return;
+      await restoreBackup(backup);
+      window.location.reload();
+    } catch (e) { setMsg((e as Error).message); }
   }
 
   async function savePin() {
@@ -112,7 +91,7 @@ export default function Settings({ staff }: { staff: Staff }) {
       setMsg('Konfirmasi PIN tidak sama.');
       return;
     }
-    await db.staff.update(staff.id!, { pinHash: hashPin(pin1) });
+    try { await changePin(staff.id!, pin1); } catch (e) { setMsg((e as Error).message); return; }
     setPin1('');
     setPin2('');
     setMsg('PIN berhasil diganti.');
@@ -196,10 +175,10 @@ export default function Settings({ staff }: { staff: Staff }) {
                     Edit
                   </button>
                   <button
-                    onClick={() => { if (confirm(`Hapus menu "${p.name}"?`)) db.products.delete(p.id!); }}
+                    onClick={() => { if (confirm(`Nonaktifkan menu "${p.name}"?`)) db.products.update(p.id!, { active: 0 }); }}
                     className="text-xs px-2 py-1 rounded-full bg-red-50 text-primary-bright"
                   >
-                    Hapus
+                    Arsipkan
                   </button>
                 </div>
               ))}
@@ -238,6 +217,7 @@ export default function Settings({ staff }: { staff: Staff }) {
           </section>
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Backup Data</h2>
+            <button className="text-sm underline mb-3" onClick={async () => { const saved = await db.recovery.orderBy('id').last(); if (saved) downloadBackup(JSON.parse(saved.data), 'sebelum-restore'); else setMsg('Belum ada salinan sebelum restore.'); }}>Unduh salinan sebelum restore terakhir</button>
             <p className="text-xs text-gray-500 mb-4">Export cadangan seluruh data, atau import untuk memulihkan.</p>
             <div className="flex gap-2 items-center">
               <button onClick={exportBackup} className="h-11 px-6 rounded-lg bg-primary text-white font-semibold">
@@ -259,6 +239,8 @@ export default function Settings({ staff }: { staff: Staff }) {
           </section>
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Koneksi Cloud (Supabase)</h2>
+            {get('sync_paused') === 'true' && <div className="p-3 bg-amber-50 mb-3"><p>Sync dijeda setelah restore. Periksa data sebelum mengirim perubahan ke cloud.</p><button className="underline" onClick={async () => { if (confirm('Kirim hasil restore ke cloud? Data cloud perangkat ini akan mengikuti data tablet.')) { await put('sync_paused', 'false'); await syncNow(); } }}>Aktifkan kembali sync</button></div>}
+            {get('sync_error') && <p role="alert" className="text-sm mb-3">{get('sync_error')}</p>}
             <p className="text-xs text-gray-500 mb-4">
               Tablet tetap jalan offline. Isi URL & anon key proyek Supabase untuk mengaktifkan sync, Dashboard Owner, dan KDS dapur.
             </p>
@@ -276,7 +258,8 @@ export default function Settings({ staff }: { staff: Staff }) {
                 className="w-full h-11 rounded-lg border border-gray-300 px-3"
               />
             </div>
-            <div className="flex items-center gap-3">
+            <CloudAccess />
+            <div className="flex items-center gap-3 mt-3">
               <button onClick={syncNow} disabled={syncing} className="h-11 px-6 rounded-lg bg-primary text-white font-semibold disabled:opacity-40">
                 {syncing ? 'Sync…' : 'Sync Sekarang'}
               </button>
@@ -288,6 +271,8 @@ export default function Settings({ staff }: { staff: Staff }) {
         </>
       )}
 
+      {isOwner && <Diagnostics />}
+      {!isOwner && <section className="mb-6"><CloudAccess roles={['cashier']} /></section>}
       <section className="bg-white rounded-xl border border-gray-200 p-6 max-w-xl">
         <h2 className="font-semibold mb-4">Ganti PIN Saya ({staff.name})</h2>
         <div className="grid grid-cols-2 gap-3 mb-4">

@@ -18,6 +18,7 @@ export function printerConnected() {
 }
 
 export async function connectPrinter(): Promise<string> {
+  ch = null;
   if (!navigator.bluetooth) throw new Error('Web Bluetooth tidak tersedia di browser ini. Pakai Chrome di Android/PC.');
   device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SVC });
   const server = await device.gatt!.connect();
@@ -49,10 +50,14 @@ function row(b: number[], l: string, r: string) {
   line(b, l + ' '.repeat(space) + r);
 }
 
-export function buildReceipt(o: Order, items: OrderItem[], pay: Payment, cashier: string): Uint8Array {
+export function buildReceipt(o: Order, items: OrderItem[], pay: Payment, cashier: string, copy = false): Uint8Array {
   const b: number[] = [0x1b, 0x40, 0x1b, 0x61, 0x01];
   line(b, 'KEDAI RAKDJAT');
   line(b, 'Main Branch');
+  if (copy) {
+    line(b, '*** SALINAN ***');
+    if (o.status === 'void') line(b, 'DIBATALKAN / REFUND');
+  }
   line(b, '--------------------------------');
   b.push(0x1b, 0x61, 0x00);
   line(b, `Order #${o.id} ${o.orderType === 'dine_in' ? 'Dine-in' : 'Takeaway'}`);
@@ -65,6 +70,7 @@ export function buildReceipt(o: Order, items: OrderItem[], pay: Payment, cashier
   }
   line(b, '--------------------------------');
   row(b, 'Subtotal', rupiah(o.subtotal));
+  if(o.discount) row(b, 'Diskon', '-'+rupiah(o.discount));
   if (o.service) row(b, 'Service', rupiah(o.service));
   row(b, 'Pajak 10%', rupiah(o.tax));
   row(b, 'TOTAL', rupiah(o.total));
@@ -109,6 +115,7 @@ export function buildBill(o: Order, items: OrderItem[], cashier: string, tableLa
   }
   line(b, '--------------------------------');
   row(b, 'Subtotal', rupiah(o.subtotal));
+  if(o.discount) row(b, 'Diskon', '-'+rupiah(o.discount));
   if (o.service) row(b, 'Service', rupiah(o.service));
   row(b, 'Pajak 10%', rupiah(o.tax));
   row(b, 'TOTAL', rupiah(o.total));
@@ -127,4 +134,8 @@ export async function printBytes(data: Uint8Array) {
     if (ch.properties.writeWithoutResponse) await ch.writeValueWithoutResponse(slice);
     else await ch.writeValue(slice);
   }
+}
+
+export function buildPrinterTest(): Uint8Array {
+  return enc.encode('\x1b@\x1ba\x01KEDAI RAKDJAT\nUJI PRINTER - BUKAN TRANSAKSI\n\x1ba\x00--------------------------------\n12345678901234567890123456789012\nPeriksa huruf dan lebar kertas.\n\n\n\x1dVB\x00');
 }

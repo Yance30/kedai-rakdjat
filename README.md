@@ -1,5 +1,7 @@
 # Kedai Rakdjat POS
 
+Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 4](docs/operasional.md).
+
 **Local-first point of sale for a real Indonesian kedai** — built for an Android tablet cashier, with cloud monitoring for the owner and a kitchen display system. Works fully offline; syncs to Supabase when a connection is available.
 
 ![Layar kasir Kedai Rakdjat POS](docs/screenshot-kasir.png)
@@ -60,7 +62,7 @@ npm install
 ### 2. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) in the SQL Editor.
+2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), then [`0004_operations.sql`](supabase/migrations/0004_operations.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 4 before acknowledging sync.
 3. Create a `.env` file in the project root:
 
 ```env
@@ -78,13 +80,14 @@ npm run build     # production build (PWA + service worker)
 npm run preview   # serve the production build locally
 ```
 
-Demo PINs: cashier `1111` · owner `1234`.
+Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of these PINs on first login.
 
 ## Security notes
 
 - Secrets are never committed: `.env` and data backups are gitignored.
-- PINs are stored as salted hashes and are excluded from cloud sync.
-- RLS is enabled on all tables. The current policies are permissive for `anon` — an intentional MVP trade-off for a single-owner private POS where the anon key acts as a shared secret. **Tighten to authenticated roles before any multi-tenant use.**
+- PINs migrate to salted PBKDF2 hashes on successful login and are excluded from cloud sync. Failed PIN attempts are rate limited locally.
+- Migration `0002_secure_sync.sql` removes permissive anonymous access. Authenticated device memberships restrict owner/cashier/kitchen roles. Public API keys are not secrets. Cloud writes use authorized atomic RPCs and generate a server-side audit trail.
+- See [deployment, recovery, and verification instructions](docs/production-setup.md). Applying the code does not automatically migrate a live Supabase project.
 
 ## Project structure
 
@@ -106,8 +109,11 @@ supabase/
 
 - [ ] Hardware verification of Bluetooth printer on the kedai's device
 - [ ] Production PWA rollout on the cashier tablet
-- [ ] Role-based RLS policies (owner / cashier / kitchen)
-- [ ] Weekly & monthly report ranges in the owner dashboard
+- [x] Role-based RLS policies, cloud login, atomic incremental sync, validated recovery, transaction audit, and automated regression tests (production migration still required)
+- [x] Date ranges, cashier filters and CSV exports in local and cloud reports
+- [x] Persistent cart recovery and audited receipt copies
+- [x] Ingredients, recipes, stock movements and transaction cost snapshots
+- [x] Responsive tablet layout and browser/device diagnostics
 
 ---
 

@@ -1,13 +1,36 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, hashPin } from '../db';
+import { db } from '../db';
+import { authenticatePin } from '../auth';
+import { reverseOrder } from '../transactions';
+import { pushAll } from '../sync';
 import { rupiah } from '../money';
-import type { Shift } from '../types';
+import { reprintReceipt } from '../receipts';
+import { connectPrinter, printerConnected } from '../printer';
+import type { Shift, Staff } from '../types';
 
 const tgl = (t: number) => new Date(t).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-export default function History({ shift }: { shift: Shift }) {
-  const orders = useLiveQuery(() => db.orders.where('shiftId').equals(shift.id!).and((o) => o.status !== 'open').toArray(), [shift.id]) ?? [];
+export default function History({ shift, actor }: { shift: Shift; actor: Staff }) {
+  const orders = useLiveQuery(() => db.orders.where('shiftId').equals(shift.id!).toArray(), [shift.id]) ?? [];
+  const audit = useLiveQuery(() => db.audit.toArray(), []) ?? [];
+  const [reason, setReason] = useState('');
+  const [returned, setReturned] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [restock, setRestock] = useState(false);
+  const [printMessage, setPrintMessage] = useState('');
+  const [printing, setPrinting] = useState<number | null>(null);
+  async function printCopy(id: number) {
+    if (printing !== null) return;
+    setPrinting(id); setPrintMessage('');
+    try {
+      if (!printerConnected()) await connectPrinter();
+      await reprintReceipt(id, actor.id!);
+      setPrintMessage(`Struk SALINAN #${id} dikirim ke printer.`);
+      void pushAll();
+    } catch (e) { setPrintMessage((e as Error).message); }
+    finally { setPrinting(null); }
+  }
   const closed = useLiveQuery(() => db.shifts.where('status').equals('closed').toArray(), []) ?? [];
   const allOrders = useLiveQuery(() => db.orders.toArray(), []) ?? [];
   const staff = useLiveQuery(() => db.staff.toArray(), []) ?? [];
@@ -17,15 +40,17 @@ export default function History({ shift }: { shift: Shift }) {
   const [detail, setDetail] = useState<number | null>(null);
 
   async function doVoid() {
-    const owner = await db.staff.where('role').equals('owner').first();
-    if (!owner || hashPin(pin) !== owner.pinHash) {
-      setErr('PIN owner salah.');
-      return;
-    }
-    await db.orders.update(voidId!, { status: 'void' });
-    setVoidId(null);
-    setPin('');
-    setErr('');
+    if (busy || voidId === null) return;
+    setBusy(true);
+    try {
+      const order = await db.orders.get(voidId);
+      if (order?.status === 'paid' && !returned) throw new Error('Konfirmasi pengembalian uang terlebih dahulu.');
+      const owner = await authenticatePin(pin, true);
+      await reverseOrder(voidId, actor.id!, owner.id!, reason, restock);
+      setVoidId(null); setPin(''); setErr(''); setReason(''); setReturned(false);
+      void pushAll();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setBusy(false); }
   }
 
   const sorted = [...closed].sort((a, b) => (b.closedAt ?? 0) - (a.closedAt ?? 0));
@@ -33,6 +58,7 @@ export default function History({ shift }: { shift: Shift }) {
   return (
     <div className="h-full overflow-y-auto p-6">
       <h1 className="font-bold text-xl mb-6">Riwayat Transaksi & Shift</h1>
+      {printMessage && <p role="status" className="notice mb-4">{printMessage}</p>}
 
       <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
         <h2 className="font-semibold mb-4">Transaksi Shift Berjalan</h2>
@@ -45,14 +71,15 @@ export default function History({ shift }: { shift: Shift }) {
                 <span className="text-xs text-gray-500 ml-2">{tgl(o.createdAt)}</span>
               </div>
               <span className="text-sm font-semibold">{rupiah(o.total)}</span>
+              {o.status !== 'open' && <button disabled={printing !== null} className="secondary-button text-xs" onClick={() => printCopy(o.id!)}>{printing === o.id ? 'Mencetak…' : 'Cetak salinan'}</button>}
               {o.status === 'void' ? (
                 <span className="text-xs px-2 py-1 rounded-full bg-red-50 text-primary-bright">VOID</span>
               ) : (
                 <button
-                  onClick={() => { setVoidId(o.id!); setErr(''); }}
+                  onClick={() => { setVoidId(o.id!); setErr(''); setReason(''); setReturned(false); setRestock(false); setPin(''); }}
                   className="text-xs px-2 py-1 rounded-full bg-gray-100 hover:bg-red-50 text-gray-600"
                 >
-                  Void
+                  {o.status === 'paid' ? 'Refund penuh' : 'Batalkan'}
                 </button>
               )}
             </div>
@@ -85,6 +112,7 @@ export default function History({ shift }: { shift: Shift }) {
                       <div key={o.id} className="flex justify-between text-xs text-gray-600">
                         <span>Order #{o.id} · {tgl(o.createdAt)} {o.status === 'void' && '(VOID)'}</span>
                         <span>{rupiah(o.total)}</span>
+                        <button disabled={printing !== null} onClick={() => printCopy(o.id!)} className="underline">Cetak salinan</button>
                       </div>
                     ))}
                   </div>
@@ -95,11 +123,17 @@ export default function History({ shift }: { shift: Shift }) {
         </div>
       </section>
 
+      <section className="bg-white rounded-xl border p-6 mt-6"><h2 className="font-semibold mb-3">Jejak Transaksi</h2>
+        {[...audit].reverse().slice(0, 100).map(a => <div key={a.id} className="text-sm border-b py-2"><strong>{a.action}</strong> · {tgl(a.createdAt)} · {a.orderId ? `Order #${a.orderId}` : `Shift #${a.shiftId}`}<p>{a.reason} · {rupiah(a.amount)}</p><p className="text-xs text-gray-500">Petugas: {staff.find(s => s.id === a.actorId)?.name ?? a.actorId}{a.approverId ? ` · Persetujuan: ${staff.find(s => s.id === a.approverId)?.name ?? a.approverId}` : ''}</p></div>)}
+      </section>
       {voidId !== null && (
         <div className="fixed inset-0 bg-black/40 grid place-items-center z-50">
           <div className="w-80 bg-white rounded-2xl p-6">
             <h2 className="font-bold mb-1">Void Order #{voidId}</h2>
-            <p className="text-xs text-gray-500 mb-4">Pembatalan mengurangi omset & kas shift ini. Butuh PIN owner.</p>
+            <p className="text-xs text-gray-500 mb-4">Butuh alasan dan PIN owner. Refund dicatat setelah uang dikembalikan melalui metode pembayaran semula; aplikasi tidak mengirim uang otomatis.</p>
+            <textarea aria-label="Alasan pembatalan" value={reason} onChange={e => setReason(e.target.value)} placeholder="Alasan (minimal 5 karakter)" className="w-full border rounded p-2 mb-2" />
+            {orders.find(o => o.id === voidId)?.status === 'paid' && <label className="flex gap-2 text-sm mb-3"><input type="checkbox" checked={returned} onChange={e => setReturned(e.target.checked)} />Uang sudah dikembalikan seluruhnya melalui metode semula</label>}
+            {orders.find(o => o.id === voidId)?.status === 'paid' && <label className="flex gap-2 text-sm mb-3"><input type="checkbox" checked={restock} onChange={e => setRestock(e.target.checked)} />Bahan belum terpakai: kembalikan stok sesuai resep transaksi</label>}
             <input
               type="password"
               value={pin}
@@ -109,8 +143,8 @@ export default function History({ shift }: { shift: Shift }) {
             />
             {err && <p className="text-xs text-primary-bright mb-2">{err}</p>}
             <div className="flex gap-2">
-              <button onClick={doVoid} className="flex-1 h-11 rounded-lg bg-primary text-white font-semibold">Void</button>
-              <button onClick={() => setVoidId(null)} className="flex-1 h-11 rounded-lg bg-gray-100">Batal</button>
+              <button disabled={busy} onClick={doVoid} className="flex-1 h-11 rounded-lg bg-primary text-white font-semibold">{busy ? 'Menyimpan…' : 'Simpan'}</button>
+              <button disabled={busy} onClick={() => setVoidId(null)} className="flex-1 h-11 rounded-lg bg-gray-100">Batal</button>
             </div>
           </div>
         </div>

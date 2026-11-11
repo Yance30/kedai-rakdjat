@@ -1,21 +1,32 @@
-import { useEffect, useState } from 'react';
+import { lazy, useEffect, useRef, useState } from 'react';
 import { db } from './db';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { startSync } from './sync';
+import CloudAccess from './components/CloudAccess';
+const CloudPortal = lazy(() => import('./screens/CloudPortal'));
+const Menu = lazy(() => import('./screens/Menu'));
+const Expenses = lazy(() => import('./screens/Expenses'));
+import SetupGuide from './components/SetupGuide';
+const Sales = lazy(() => import('./screens/Sales'));
+const Inventory = lazy(() => import('./screens/Inventory'));
 import type { Shift, Staff } from './types';
 import Login from './screens/Login';
 import Cashier from './screens/Cashier';
 import Meja from './screens/Meja';
 import Report from './screens/Report';
 import History from './screens/History';
-import Settings from './screens/Settings';
-import Cloud from './screens/Cloud';
-import Kds from './screens/Kds';
+const Settings = lazy(() => import('./screens/Settings'));
+const Cloud = lazy(() => import('./screens/Cloud'));
+const Kds = lazy(() => import('./screens/Kds'));
 
 async function ensureShift(staffId: number): Promise<Shift> {
-  const open = await db.shifts.where('status').equals('open').first();
-  if (open) return open;
-  const shift: Shift = { staffId, status: 'open', openedAt: Date.now(), openingFloat: 0 };
-  shift.id = await db.shifts.add(shift);
-  return shift;
+  return db.transaction('rw', db.shifts, async () => {
+    const open = await db.shifts.where('status').equals('open').first();
+    if (open) return open;
+    const shift: Shift = { staffId, status: 'open', openedAt: Date.now(), openingFloat: 0 };
+    shift.id = await db.shifts.add(shift);
+    return shift;
+  });
 }
 
 const ICONS: Record<string, string> = {
@@ -39,9 +50,22 @@ function Icon({ name }: { name: string }) {
 }
 
 export default function App() {
+  const [cloudPortal, setCloudPortal] = useState(false);
+  const settingsResult = useLiveQuery(() => db.settings.toArray(), []);
+  const syncSettings = settingsResult ?? [];
+  const generation = useRef<string | null>(null);
+  useEffect(() => {
+    if (!settingsResult) return;
+    const current = settingsResult.find(s => s.key === 'data_generation')?.value ?? '';
+    if (generation.current !== null && generation.current !== current) window.location.reload();
+    generation.current = current;
+  }, [settingsResult]);
+  const syncError = syncSettings.find(s => s.key === 'sync_error')?.value;
+  const lastSync = syncSettings.find(s => s.key === 'last_sync')?.value;
+  useEffect(() => startSync(), []);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
-  const [tab, setTab] = useState<'kasir' | 'meja' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan'>('kasir');
+  const [tab, setTab] = useState<'kasir' | 'meja' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
   const [activeTable, setActiveTable] = useState<number | null>(null);
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -70,9 +94,11 @@ export default function App() {
     return <div className="h-full grid place-items-center text-primary font-display font-bold text-3xl">Kedai Rakdjat</div>;
   }
 
+  if (cloudPortal) return <CloudPortal onBack={() => setCloudPortal(false)} />;
   if (!staff) {
     return (
       <Login
+        onCloud={() => setCloudPortal(true)}
         onLogin={async (s) => {
           setStaff(s);
           setShift(await ensureShift(s.id!));
@@ -91,14 +117,19 @@ export default function App() {
     { key: 'meja', label: 'Meja', icon: 'meja', active: tab === 'meja' || (tab === 'kasir' && !!activeTable) },
     { key: 'laporan', label: 'Keuangan', icon: 'keuangan' },
     { key: 'riwayat', label: 'Riwayat', icon: 'riwayat' },
+    { key: 'penjualan', label: 'Laporan Penjualan', icon: 'cloud', ownerOnly: true },
+    { key: 'menu', label: 'Kelola Menu', icon: 'meja', ownerOnly: true },
+    { key: 'biaya', label: 'Pengeluaran', icon: 'keuangan', ownerOnly: true },
+    { key: 'panduan', label: 'Panduan & Backup', icon: 'pengaturan', ownerOnly: true },
+    { key: 'stok', label: 'Stok & Resep', icon: 'meja', ownerOnly: true },
     { key: 'kds', label: 'KDS Dapur', icon: 'kds' },
     { key: 'cloud', label: 'Dashboard Owner', icon: 'cloud', ownerOnly: true },
     { key: 'pengaturan', label: 'Pengaturan', icon: 'pengaturan' },
   ];
 
   return (
-    <div className="h-full flex">
-      <aside className="w-60 shrink-0 kr-shell text-white flex flex-col p-4">
+    <div className="app-layout h-full flex">
+      <aside className="app-sidebar w-60 shrink-0 kr-shell text-white flex flex-col p-4">
         <div className="flex items-center gap-3 px-2 pt-1 mb-6">
           <div className="w-11 h-11 rounded-full border border-brass/60 grid place-items-center font-display font-bold text-brass-soft text-lg">
             KR
@@ -109,7 +140,7 @@ export default function App() {
           </div>
         </div>
         <div className="h-px bg-white/10 mx-2 mb-4" />
-        <nav className="space-y-1">
+        <nav className="space-y-1 overflow-y-auto min-h-0">
           {nav
             .filter((n) => !n.ownerOnly || staff.role === 'owner')
             .map((n) => {
@@ -129,10 +160,11 @@ export default function App() {
               );
             })}
         </nav>
-        <div className="mt-auto">
+        <div className="mt-auto pt-2">
+          {staff.role === 'owner' && (!syncSettings.find(s=>s.key==='last_backup_download') || Date.now()-Number(syncSettings.find(s=>s.key==='last_backup_download')?.value)>86400000) && <button className="text-xs text-amber-200 p-2" onClick={()=>go('panduan')}>Pengingat: unduh backup hari ini</button>}
           <div className="flex items-center gap-2 px-2 mb-3 text-xs text-white/50">
             <span className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`} />
-            {online ? 'Online · cloud tersambung' : 'Offline · mode lokal'}
+            {online ? (syncError ? 'Online · sync menunggu' : lastSync ? 'Online · sync berhasil' : 'Online · belum sync') : 'Offline · mode lokal'}
           </div>
           <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-brass/20 text-brass-soft grid place-items-center font-bold text-sm shrink-0">
@@ -160,13 +192,23 @@ export default function App() {
           ) : tab === 'meja' ? (
             <Meja onOpen={(id) => { setActiveTable(id); setTab('kasir'); }} />
           ) : tab === 'laporan' ? (
-            <Report shift={shift} onClosed={() => { setShift(null); setStaff(null); }} />
+            <Report shift={shift} actorId={staff.id!} onClosed={() => { setShift(null); setStaff(null); }} />
           ) : tab === 'riwayat' ? (
-            <History shift={shift} />
+            <History shift={shift} actor={staff} />
           ) : tab === 'kds' ? (
-            <Kds />
-          ) : tab === 'cloud' ? (
-            <Cloud />
+            <CloudAccess roles={['owner', 'kitchen']}>{device => <Kds key={device} device={device} />}</CloudAccess>
+          ) : tab === 'penjualan' && staff.role === 'owner' ? (
+            <Sales />
+          ) : tab === 'menu' && staff.role === 'owner' ? (
+            <Menu actor={staff} />
+          ) : tab === 'biaya' && staff.role === 'owner' ? (
+            <Expenses actor={staff} />
+          ) : tab === 'panduan' && staff.role === 'owner' ? (
+            <SetupGuide onNavigate={go} />
+          ) : tab === 'stok' && staff.role === 'owner' ? (
+            <Inventory actor={staff} />
+          ) : tab === 'cloud' && staff.role === 'owner' ? (
+            <CloudAccess roles={['owner']}>{device => <Cloud key={device} device={device} />}</CloudAccess>
           ) : (
             <Settings staff={staff} />
           )}

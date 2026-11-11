@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { rupiah } from '../money';
 import { buildBill, buildReceipt, buildTicket, connectPrinter, printBytes, printerAvailable, printerConnected } from '../printer';
 import { pushAll } from '../sync';
+import { commitSale, validateSale } from '../transactions';
+import { useCart } from '../useCart';
 import type { DiningTable, Order, OrderItem, Payment, Product, Shift, Staff } from '../types';
 
 interface Line {
@@ -34,41 +36,19 @@ export default function Cashier({
   const table = useLiveQuery(() => (tableId ? db.meja.get(tableId) : undefined), [tableId]);
   const getSetting = (k: string) => settings.find((s) => s.key === k)?.value ?? '';
   const serviceRate = Number(getSetting('service_charge')) || 0;
+  const working = useRef(false);
+  const draft = useCart(shift.id!, staff.id!, tableId);
+  const lines = draft.cart?.lines ?? [];
+  const orderType = draft.cart?.orderType ?? 'dine_in';
+  const loadedOrderId = draft.cart?.orderId ?? null;
+  const [busy, setBusy] = useState(false);
+  const [saleError, setSaleError] = useState('');
   const [cat, setCat] = useState('Semua');
   const [q, setQ] = useState('');
-  const [lines, setLines] = useState<Line[]>([]);
-  const [orderType, setOrderType] = useState<'dine_in' | 'takeaway'>('dine_in');
   const [paying, setPaying] = useState(false);
   const [success, setSuccess] = useState<Success | null>(null);
   const [printerName, setPrinterName] = useState('');
   const [printerMsg, setPrinterMsg] = useState('');
-  const [loadedOrderId, setLoadedOrderId] = useState<number | null>(null);
-
-  useEffect(() => {
-    if (!tableId) {
-      setLines([]);
-      setLoadedOrderId(null);
-      return;
-    }
-    setOrderType('dine_in');
-    (async () => {
-      const open = await db.orders.where('tableId').equals(tableId).and((o) => o.status === 'open').first();
-      if (open?.id) {
-        const items = await db.orderItems.where('orderId').equals(open.id).toArray();
-        const prods = await db.products.toArray();
-        setLines(
-          items
-            .map((it) => ({ product: prods.find((p) => p.id === it.productId)!, qty: it.qty }))
-            .filter((l) => l.product),
-        );
-        setLoadedOrderId(open.id);
-      } else {
-        setLines([]);
-        setLoadedOrderId(null);
-      }
-    })();
-  }, [tableId]);
-
   async function handlePrinter() {
     try {
       setPrinterName(await connectPrinter());
@@ -83,34 +63,40 @@ export default function Cashier({
     (p) => (cat === 'Semua' || p.category === cat) && p.name.toLowerCase().includes(q.toLowerCase()),
   );
 
+  const [discountMode,setDiscountMode]=useState('rupiah');
+  const [discountInput,setDiscountInput]=useState('');
+  const [discountReason,setDiscountReason]=useState('');
+  const [discountPin,setDiscountPin]=useState('');
+  const cartSignature=JSON.stringify(lines);
+  useEffect(()=>{setDiscountInput('');setDiscountReason('');setDiscountPin('');},[cartSignature]);
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  const service = Math.round(subtotal * serviceRate / 100);
-  const tax = Math.round((subtotal + service) * 0.1);
-  const total = subtotal + service + tax;
+  const discount=discountMode==='persen'?Math.round(subtotal*Number(discountInput)/100):Number(discountInput);
+  const discountValid=Number.isSafeInteger(discount)&&discount>=0&&(subtotal===0?discount===0:discount<subtotal)&&Number(discountInput)>=0;
+  const service = Math.round((subtotal-discount) * serviceRate / 100);
+  const tax = Math.round((subtotal - discount + service) * 0.1);
+  const total = subtotal - discount + service + tax;
 
   function add(p: Product) {
-    setLines((prev) => {
-      const ex = prev.find((l) => l.product.id === p.id);
-      return ex
-        ? prev.map((l) => (l.product.id === p.id ? { ...l, qty: l.qty + 1 } : l))
-        : [...prev, { product: p, qty: 1 }];
-    });
+    if (busy || !draft.cart || draft.error || products.find(item=>item.id===p.id)?.soldOut) return;
+    const found = lines.find(l => l.product.id === p.id);
+    draft.update(found ? lines.map(l => l.product.id === p.id ? { ...l, qty: l.qty + 1 } : l) : [...lines, { product: p, qty: 1 }]);
   }
-
   function dec(id: number) {
-    setLines((prev) =>
-      prev
-        .map((l) => (l.product.id === id ? { ...l, qty: l.qty - 1 } : l))
-        .filter((l) => l.qty > 0),
-    );
+    if (busy) return;
+    draft.update(lines.map(l => l.product.id === id ? { ...l, qty: l.qty - 1 } : l).filter(l => l.qty > 0));
   }
 
   async function confirmPay(method: 'cash' | 'qris', tendered: number) {
+    if (working.current || !lines.length) return;
+    working.current = true; setBusy(true); setSaleError(''); setPrinterMsg('');
+    try {
+    const savedDraft = await draft.flush();
     const order: Order = {
       shiftId: shift.id!,
       status: 'paid',
       createdAt: Date.now(),
       subtotal,
+      discount, discountReason,
       service,
       tax,
       total,
@@ -118,6 +104,7 @@ export default function Cashier({
       ...(tableId ? { tableId } : {}),
     };
     const pay: Payment = {
+      requestId: savedDraft.requestId,
       orderId: 0,
       shiftId: shift.id!,
       method,
@@ -126,30 +113,10 @@ export default function Cashier({
       change: tendered - total,
       createdAt: Date.now(),
     };
-    const id = await db.transaction('rw', db.orders, db.orderItems, db.payments, db.meja, async () => {
-      let orderId: number;
-      if (loadedOrderId) {
-        orderId = loadedOrderId;
-        const { createdAt: _c, ...fields } = order;
-        await db.orders.update(orderId, fields);
-        await db.orderItems.where('orderId').equals(orderId).delete();
-      } else {
-        orderId = await db.orders.add(order);
-      }
-      await db.orderItems.bulkAdd(
-        lines.map((l) => ({
-          orderId,
-          productId: l.product.id!,
-          name: l.product.name,
-          qty: l.qty,
-          price: l.product.price,
-        })),
-      );
-      pay.orderId = orderId;
-      await db.payments.add(pay);
-      if (tableId) await db.meja.update(tableId, { status: 'cleaning' });
-      return orderId;
-    });
+    const id = await commitSale(order, lines.map(l => ({ productId: l.product.id!, name: l.product.name, qty: l.qty, price: l.product.price })), pay, staff.id!, loadedOrderId, savedDraft, discountPin);
+    draft.completed();
+    setDiscountPin('');setDiscountInput('');
+    setPaying(false);
     if (printerConnected()) {
       const items: OrderItem[] = lines.map((l) => ({
         orderId: id,
@@ -162,18 +129,21 @@ export default function Cashier({
         await printBytes(buildReceipt({ ...order, id }, items, pay, staff.name));
         if (!tableId && orderType === 'dine_in') await printBytes(buildTicket({ ...order, id }, items));
       } catch {
-        // gagal cetak tidak boleh memblokir pembayaran
+        setPrinterMsg('Pembayaran tersimpan, tetapi struk gagal dicetak. Jangan ulangi pembayaran.');
       }
     }
     setSuccess({ id, total, method, change: tendered - total });
-    setLines([]);
-    setLoadedOrderId(null);
     setPaying(false);
     void pushAll();
+    } catch (e) { setSaleError((e as Error).message); }
+    finally { working.current = false; setBusy(false); }
   }
 
   async function saveOrder() {
-    if (!tableId || lines.length === 0) return;
+    if (!tableId || lines.length === 0 || working.current) return;
+    working.current = true; setBusy(true); setSaleError('');
+    try {
+    const savedDraft = await draft.flush();
     const order: Order = {
       shiftId: shift.id!,
       status: 'open',
@@ -185,7 +155,12 @@ export default function Cashier({
       orderType: 'dine_in',
       tableId,
     };
-    const id = await db.transaction('rw', db.orders, db.orderItems, db.meja, async () => {
+    validateSale(order, lines.map(l => ({ productId: l.product.id!, name: l.product.name, qty: l.qty, price: l.product.price })));
+    const id = await db.transaction('rw', db.orders, db.orderItems, db.meja, db.shifts, db.drafts, async () => {
+      if ((await db.drafts.get(savedDraft.key))?.revision !== savedDraft.revision) throw new Error('Keranjang berubah di tab lain. Muat ulang.');
+      if ((await db.shifts.get(shift.id!))?.status !== 'open') throw new Error('Shift sudah ditutup.');
+      if (loadedOrderId && (await db.orders.get(loadedOrderId))?.status !== 'open') throw new Error('Pesanan sudah berubah. Muat ulang meja.');
+      if (!loadedOrderId && await db.orders.where('tableId').equals(tableId).and(o => o.status === 'open').count()) throw new Error('Meja sudah memiliki pesanan. Muat ulang meja.');
       let orderId: number;
       if (loadedOrderId) {
         orderId = loadedOrderId;
@@ -205,6 +180,7 @@ export default function Cashier({
         })),
       );
       await db.meja.update(tableId, { status: 'occupied' });
+      await db.drafts.delete(savedDraft.key);
       return orderId;
     });
     if (printerConnected()) {
@@ -221,8 +197,11 @@ export default function Cashier({
         // gagal cetak tidak boleh memblokir penyimpanan pesanan
       }
     }
+    draft.completed();
     void pushAll();
     onTableDone?.();
+    } catch (e) { setSaleError((e as Error).message); }
+    finally { working.current = false; setBusy(false); }
   }
 
   async function printBill() {
@@ -254,8 +233,9 @@ export default function Cashier({
   }
 
   return (
-    <div className="h-full flex">
-      <div className="flex-1 min-w-0 p-6 overflow-y-auto">
+    <div className="cashier-layout h-full flex">
+      <div className="cashier-menu flex-1 min-w-0 p-6 overflow-y-auto">
+        <div className="mb-5"><p className="eyebrow">LAYANAN KEDAI</p><h1 className="text-2xl font-semibold">Kasir & Pesanan</h1><p className="text-sm text-gray-500 mt-1">Pilih menu, periksa pesanan, lalu selesaikan pembayaran.</p></div>
         <div className="flex gap-2 mb-4">
           <input
             value={q}
@@ -297,17 +277,20 @@ export default function Cashier({
               <div className="font-semibold truncate">{p.name}</div>
               <div className="text-primary font-bold mb-3 tabular-nums">{rupiah(p.price)}</div>
               <button
+                disabled={p.soldOut}
                 onClick={() => add(p)}
                 className="mt-auto h-10 rounded-xl bg-primary/5 text-primary border border-primary/15 font-semibold hover:bg-primary hover:text-white"
               >
-                + Tambah
+                {p.soldOut ? 'Habis' : '+ Tambah'}
               </button>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="w-80 shrink-0 bg-white border-l border-gray-200 flex flex-col p-4">
+      <div className="cashier-basket w-80 shrink-0 bg-white border-l border-gray-200 flex flex-col p-4">
+        <p role="status" className="text-xs text-emerald-700 mb-3">{draft.status}</p>
+        {draft.error && <p role="alert" className="text-sm text-red-700 mb-2">{draft.error} <button className="underline" onClick={() => location.reload()}>Muat ulang</button></p>}
         <div className="flex items-center justify-between mb-1">
           <div className="font-display font-semibold text-lg">{tableId ? `Meja ${table?.name ?? ''}` : 'Pesanan Baru'}</div>
           {tableId && (
@@ -319,7 +302,7 @@ export default function Cashier({
             {(['dine_in', 'takeaway'] as const).map((t) => (
               <button
                 key={t}
-                onClick={() => setOrderType(t)}
+                onClick={() => draft.update(lines, t)}
                 className={`flex-1 px-3 py-1.5 rounded-md text-sm ${orderType === t ? 'bg-white text-primary font-semibold shadow-sm' : 'text-gray-500'}`}
               >
                 {t === 'dine_in' ? 'Dine-in' : 'Takeaway'}
@@ -328,6 +311,7 @@ export default function Cashier({
           </div>
         )}
         <div className="flex-1 overflow-y-auto space-y-3">
+          {lines.length > 0 && <button disabled={busy || draft.saving} onClick={() => { if (confirm('Kosongkan keranjang ini? Pesanan yang sudah dikirim ke dapur tetap tersimpan.')) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
           {lines.length === 0 && <p className="text-sm text-gray-400">Belum ada item.</p>}
           {lines.map((l) => (
             <div key={l.product.id} className="flex items-center gap-2">
@@ -343,8 +327,14 @@ export default function Cashier({
             </div>
           ))}
         </div>
+        <details className="mt-3 text-sm"><summary className="cursor-pointer py-2">Diskon dengan PIN owner</summary><div className="space-y-2">
+          <label>Jenis diskon<select aria-label="Jenis diskon" className="w-full border rounded p-2" value={discountMode} onChange={e=>{setDiscountMode(e.target.value);setDiscountInput('');}}><option value="rupiah">Rupiah</option><option value="persen">Persen</option></select></label>
+          <label>Nilai diskon<input aria-label="Nilai diskon" className="w-full border rounded p-2" type="number" min="0" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}/></label>
+          {discount>0&&<><label>Alasan diskon<input aria-label="Alasan diskon" className="w-full border rounded p-2" value={discountReason} onChange={e=>setDiscountReason(e.target.value)}/></label><label>PIN owner diskon<input aria-label="PIN owner diskon" className="w-full border rounded p-2" type="password" inputMode="numeric" autoComplete="off" value={discountPin} onChange={e=>setDiscountPin(e.target.value)}/></label><p className="text-xs text-gray-500">Diskon diterapkan sebelum service dan pajak; persetujuan dicatat saat pembayaran. PIN tidak disimpan.</p></>}
+          {!discountValid&&<p role="alert">Diskon harus lebih kecil dari subtotal.</p>}</div></details>
         <div className="border-t border-gray-200 pt-3 mt-3 space-y-1 text-sm">
           <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{rupiah(subtotal)}</span></div>
+          {discount>0&&<div className="flex justify-between"><span>Diskon</span><span>−{rupiah(discount)}</span></div>}
           {serviceRate > 0 && (
             <div className="flex justify-between"><span className="text-gray-500">Service ({serviceRate}%)</span><span>{rupiah(service)}</span></div>
           )}
@@ -355,7 +345,7 @@ export default function Cashier({
           <div className="flex gap-2 mt-3">
             <button
               onClick={saveOrder}
-              disabled={lines.length === 0}
+              disabled={busy || draft.saving || !!draft.error || lines.length === 0 || discount !== 0}
               className="flex-1 h-11 rounded-lg bg-gray-800 text-white font-semibold disabled:opacity-40"
             >
               Simpan & ke Dapur
@@ -372,20 +362,22 @@ export default function Cashier({
         )}
         <button
           onClick={() => setPaying(true)}
-          disabled={lines.length === 0}
+          disabled={busy || draft.saving || !!draft.error || lines.length === 0}
           className="mt-3 h-12 rounded-xl bg-gradient-to-r from-primary to-primary-bright text-white font-semibold shadow-md disabled:opacity-40"
         >
           Lanjut ke Pembayaran
         </button>
       </div>
 
-      {paying && <PayModal total={total} qrisImage={getSetting('qris_image')} onCancel={() => setPaying(false)} onConfirm={confirmPay} />}
+      {saleError && <div role="alert" className="fixed bottom-4 left-4 md:left-24 z-[60] bg-red-50 text-primary p-4 rounded shadow">{saleError}</div>}
+      {paying && <PayModal busy={busy} total={total} qrisImage={getSetting('qris_image')} onCancel={() => { if (!working.current) setPaying(false); }} onConfirm={confirmPay} />}
 
       {success && (
         <div className="fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
           <div className="w-96 bg-white rounded-3xl p-8 text-center shadow-xl kr-zoom">
             <div className="w-14 h-14 rounded-full bg-green-100 text-green-700 grid place-items-center text-2xl mx-auto mb-4">✓</div>
             <h2 className="font-display font-bold text-xl mb-1">Pembayaran Berhasil</h2>
+            {printerMsg && <p role="alert" className="text-sm text-primary mb-2">{printerMsg}</p>}
             <p className="text-sm text-gray-500 mb-4">Order #{success.id} · {success.method === 'cash' ? 'Tunai' : 'QRIS'}</p>
             <div className="text-3xl font-display font-bold text-primary mb-1 tabular-nums">{rupiah(success.total)}</div>
             {success.method === 'cash' && (
@@ -402,11 +394,13 @@ export default function Cashier({
 }
 
 function PayModal({
+  busy,
   total,
   qrisImage,
   onCancel,
   onConfirm,
 }: {
+  busy: boolean;
   total: number;
   qrisImage?: string;
   onCancel: () => void;
@@ -471,7 +465,7 @@ function PayModal({
         )}
         <button
           onClick={() => onConfirm(method, method === 'cash' ? Number(tendered) : total)}
-          disabled={method === 'cash' && !cashValid}
+          disabled={busy || (method === 'cash' && !cashValid)}
           className="w-full h-12 rounded-lg bg-primary text-white font-semibold disabled:opacity-40"
         >
           Konfirmasi Pembayaran

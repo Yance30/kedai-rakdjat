@@ -1,0 +1,14 @@
+import { useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { db } from '../db';
+import { createBackup,downloadBackup } from '../backup';
+export default function SetupGuide({onNavigate}:{onNavigate:(tab:'menu'|'stok'|'pengaturan')=>void}) {
+  const settings=useLiveQuery(()=>db.settings.toArray(),[])??[];
+  const [message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+  const last=Number(settings.find(s=>s.key==='last_backup_download')?.value??0);
+  const steps=[{key:'menu',title:'Siapkan menu dan harga',text:'Periksa kategori, harga, foto dan ketersediaan.',tab:'menu' as const},{key:'stok',title:'Isi bahan dan resep',text:'Catat stok awal serta resep agar HPP tersedia.',tab:'stok' as const},{key:'cloud',title:'Verifikasi cloud',text:'Jalankan pemeriksaan kesiapan, migrasi dan login akun cloud.',tab:'pengaturan' as const},{key:'printer',title:'Uji printer dan transaksi',text:'Gunakan perangkat kedai, periksa struk dan hasil rekonsiliasi.',tab:'pengaturan' as const}];
+  return <div className="screen-page"><header className="page-heading"><div><p className="eyebrow">PERSIAPAN OPERASIONAL</p><h1>Panduan & Backup</h1><p>Checklist ini ditandai sendiri oleh owner; bukan pengganti pengujian perangkat atau verifikasi cloud.</p></div></header>
+  <section className="panel mb-5"><h2>Backup Data Kedai</h2><p className="mb-3">{last?`Unduhan backup terakhir dimulai: ${new Date(last).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})} WIB.`:'Belum ada unduhan backup tercatat pada perangkat ini.'}</p><p className="text-sm text-gray-500 mb-4">Unduh setiap selesai operasional dan simpan di perangkat lain. Status ini mencatat unduhan yang dimulai, bukan memastikan file tersimpan. Draf keranjang tidak ikut backup.</p>
+  <button className="primary-button" disabled={busy} onClick={async()=>{setBusy(true);try{downloadBackup(await createBackup());await db.settings.put({key:'last_backup_download',value:String(Date.now())});setMessage('Unduhan backup dimulai. Periksa file di folder unduhan dan simpan salinan di perangkat lain.');}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}}>Unduh backup sekarang</button>{message&&<p role="status" className="notice mt-3">{message}</p>}</section>
+  <section className="panel"><h2>Langkah Persiapan Kedai</h2>{steps.map(step=><div key={step.key} className="border-b py-4"><div className="flex items-center gap-3"><input aria-label={`Selesai: ${step.title}`} type="checkbox" checked={settings.some(s=>s.key===`setup_${step.key}`&&s.value==='true')} onChange={e=>void db.settings.put({key:`setup_${step.key}`,value:String(e.target.checked)})}/><strong>{step.title}</strong></div><p className="text-sm text-gray-500 my-3">{step.text}</p><button className="secondary-button" onClick={()=>onNavigate(step.tab)}>Buka {step.title}</button></div>)}</section></div>;
+}

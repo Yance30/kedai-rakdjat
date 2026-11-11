@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { db, hashPin } from '../db';
+import { db } from '../db';
+import { authenticatePin } from '../auth';
+import { closeShift } from '../transactions';
+import { pushAll } from '../sync';
 import { rupiah } from '../money';
 import { BarChart, DonutChart } from '../components/Charts';
 import type { Shift } from '../types';
@@ -10,11 +13,12 @@ const DENOMS = [100000, 50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100];
 const jam = (t: number) =>
   new Date(t).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 
-export default function Report({ shift, onClosed }: { shift: Shift; onClosed: () => void }) {
+export default function Report({ shift, actorId, onClosed }: { shift: Shift; actorId: number; onClosed: () => void }) {
   const orders = useLiveQuery(() => db.orders.where('shiftId').equals(shift.id!).toArray(), [shift.id]) ?? [];
   const payments = useLiveQuery(() => db.payments.where('shiftId').equals(shift.id!).toArray(), [shift.id]) ?? [];
   const [counts, setCounts] = useState<Record<number, string>>({});
   const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
   const paid = orders.filter((o) => o.status === 'paid');
@@ -45,24 +49,16 @@ export default function Report({ shift, onClosed }: { shift: Shift; onClosed: ()
   const avgTicket = paid.length > 0 ? Math.round(gross / paid.length) : 0;
 
   async function close() {
-    if (openCount > 0) {
-      setError(`Masih ada ${openCount} pesanan meja terbuka. Selesaikan / bayar dulu sebelum tutup shift.`);
-      return;
-    }
-    if (diff !== 0) {
-      const owner = await db.staff.where('role').equals('owner').first();
-      if (!owner || hashPin(pin) !== owner.pinHash) {
-        setError('Ada selisih kas — masukkan PIN owner untuk otorisasi.');
-        return;
-    }
-    }
-    await db.shifts.update(shift.id!, {
-      status: 'closed',
-      closedAt: Date.now(),
-      actualCash: physical,
-      note: diff !== 0 ? `Selisih ${rupiah(diff)}` : undefined,
-    });
-    onClosed();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (Object.values(counts).some(v => v !== '' && (!Number.isSafeInteger(Number(v)) || Number(v) < 0))) throw new Error('Jumlah lembar/koin harus bilangan bulat positif atau nol.');
+      const owner = diff !== 0 ? await authenticatePin(pin, true) : undefined;
+      await closeShift(shift.id!, actorId, physical, owner?.id);
+      void pushAll();
+      onClosed();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
   }
 
   return (
@@ -189,7 +185,7 @@ export default function Report({ shift, onClosed }: { shift: Shift; onClosed: ()
           </>
         )}
         {error && <p className="text-sm text-primary-bright mb-3">{error}</p>}
-        <button onClick={close} className="w-full h-12 rounded-lg bg-primary text-white font-semibold">
+        <button disabled={busy} onClick={close} className="w-full h-12 rounded-lg bg-primary text-white font-semibold">
           Tutup Shift & Simpan Z-Report
         </button>
       </div>

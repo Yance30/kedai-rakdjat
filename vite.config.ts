@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt',
       manifest: {
         name: 'Kedai Rakdjat POS',
         short_name: 'Rakdjat POS',
@@ -24,6 +24,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        clientsClaim: true,
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
       },
     }),

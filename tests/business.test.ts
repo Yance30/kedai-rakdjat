@@ -1,0 +1,56 @@
+import 'fake-indexeddb/auto';
+import {beforeEach,afterAll,it,expect,vi} from 'vitest';
+import {db} from '../src/db';
+import {addExpense,voidExpense,saveProduct,recordStock} from '../src/operations';
+import {saveIngredient} from '../src/inventory';
+import {commitSale} from '../src/transactions';
+import {changePin} from '../src/auth';
+import {createBackup,parseBackup,restoreBackup} from '../src/backup';
+import {buildSalesReport} from '../src/reports';
+vi.mock('../src/supabase',()=>({deviceId:async()=> 'test-device',cloudProject:()=>'',loadSupabase:vi.fn()}));
+vi.mock('../src/sync',()=>({exclusive:async(fn:()=>Promise<unknown>)=>fn()}));
+beforeEach(async()=>{await db.delete();await db.open();await db.shifts.add({id:1,staffId:2,status:'open',openedAt:1,openingFloat:0});});
+afterAll(()=>db.close());
+const order={shiftId:1,status:'paid' as const,createdAt:Date.parse('2026-11-11T03:00:00Z'),subtotal:10000,discount:1000,discountReason:'Promo pelanggan',service:0,tax:900,total:9900,orderType:'takeaway' as const};
+const lines=[{productId:1,name:'Kopi',price:10000,qty:1}];
+const payment={shiftId:1,orderId:0,method:'cash' as const,amount:9900,tendered:10000,change:100,createdAt:order.createdAt,requestId:'discount-once'};
+it('diskon memerlukan PIN owner dan tercatat atomik dengan pembayaran',async()=>{
+  await changePin(1,'987654');
+  await expect(commitSale(order,lines,payment,2,null,undefined,'1111')).rejects.toThrow();
+  expect(await db.payments.count()).toBe(0);
+  const id=await commitSale(order,lines,payment,2,null,undefined,'987654');
+  expect((await db.orders.get(id))?.discountApproverId).toBe(1);
+  expect(await db.audit.where('action').equals('discount').count()).toBe(1);
+  await commitSale(order,lines,payment,2,null,undefined,'987654');
+  expect(await db.payments.count()).toBe(1);
+  const report=buildSalesReport(await db.orders.toArray(),await db.payments.toArray(),await db.shifts.toArray(),await db.staff.toArray(),await db.audit.toArray(),'2026-11-11','2026-11-11');
+  expect(report.rows[0].subtotal).toBe(9000);expect(report.net).toBe(9900);
+  expect(parseBackup(JSON.stringify(await createBackup())).data.orders[0].discount).toBe(1000);
+});
+it('menu habis menolak checkout dan rollback transaksi',async()=>{
+  await saveProduct({...((await db.products.get(1))!),soldOut:true},1);
+  await expect(commitSale({...order,discount:0,total:11000,tax:1000},lines,{...payment,amount:11000,tendered:11000,change:0},2,null)).rejects.toThrow('tidak tersedia');
+  expect(await db.orders.count()).toBe(0);
+  await expect(saveProduct({...((await db.products.get(1))!),price:12345},2)).rejects.toThrow('owner');
+});
+it('stok opname menolak saldo usang dan bahan terbuang tidak boleh negatif',async()=>{
+  const id=await saveIngredient({name:'Susu',unit:'ml',stock:1000,minimum:100,unitCost:20,active:1},1);
+  await recordStock(id,100,'waste',1000,'Susu tumpah',1);
+  await expect(recordStock(id,950,'stocktake',1000,'Hitung fisik',1)).rejects.toThrow('berubah');
+  await expect(recordStock(id,1000,'waste',900,'Tumpah lagi',1)).rejects.toThrow('melebihi');
+  await recordStock(id,850,'stocktake',900,'Hitung ulang',1);
+  expect((await db.ingredients.get(id))?.stock).toBe(850);
+  expect((await db.stockMovements.toArray()).reduce((s,m)=>s+m.qty,0)).toBe(850);
+  const backup=await createBackup();parseBackup(JSON.stringify(backup));
+});
+it('pengeluaran owner disimpan di backup, batal tetap berjejak, restore utuh',async()=>{
+  const input={date:'2026-11-11',category:'Listrik',description:'Token listrik',amount:50000};
+  await expect(addExpense(input,2)).rejects.toThrow('owner');
+  const id=await addExpense(input,1);
+  await voidExpense(id,'Salah nominal',1);
+  const backup=await createBackup();expect(backup.version).toBe(3);
+  await db.expenses.clear();await restoreBackup(backup);
+  expect((await db.expenses.get(id))?.voidReason).toBe('Salah nominal');
+  const bad=structuredClone(backup);bad.data.expenses[0].amount=-1;
+  expect(()=>parseBackup(JSON.stringify(bad))).toThrow('pengeluaran');
+});

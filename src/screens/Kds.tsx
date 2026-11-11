@@ -25,7 +25,7 @@ function elapsed(t: number, now: number) {
   return m < 1 ? '<1 mnt' : `${m} mnt`;
 }
 
-export default function Kds() {
+export default function Kds({ device }: { device: string }) {
   const [configured, setConfigured] = useState(true);
   const [orders, setOrders] = useState<KdsOrder[]>([]);
   const [items, setItems] = useState<KdsItem[]>([]);
@@ -41,11 +41,12 @@ export default function Kds() {
     }
     setConfigured(true);
     const [o, t] = await Promise.all([
-      sb.from('orders').select('*').eq('status', 'open').order('created_at', { ascending: true }),
-      sb.from('dining_tables').select('local_id,name'),
+      sb.from('orders').select('*').eq('device_id', device).neq('status', 'void').gte('created_at', new Date().setHours(0, 0, 0, 0)).order('created_at', { ascending: true }),
+      sb.from('dining_tables').select('local_id,name').eq('device_id', device),
     ]);
-    if (o.error) {
-      setMsg(o.error.message);
+    if (o.error || t.error) {
+      setOrders([]); setItems([]);
+      setMsg(o.error?.message || t.error?.message || 'Gagal memuat dapur.');
       return;
     }
     const open = o.data as KdsOrder[];
@@ -53,13 +54,13 @@ export default function Kds() {
     setTables(t.data as { local_id: number; name: string }[]);
     if (open.length) {
       const ids = open.map((x) => x.local_id);
-      const it = await sb.from('order_items').select('*').in('order_local_id', ids);
+      const it = await sb.from('order_items').select('*').eq('device_id', device).in('order_local_id', ids);
       setItems((it.data as KdsItem[]) ?? []);
     } else {
       setItems([]);
     }
     setMsg('');
-  }, []);
+  }, [device]);
 
   useEffect(() => {
     refresh();
@@ -71,8 +72,8 @@ export default function Kds() {
   async function advance(o: KdsOrder, next: string) {
     const sb = await loadSupabase();
     if (!sb) return;
-    const { error } = await sb.from('orders').update({ kds_status: next }).eq('device_id', o.device_id).eq('local_id', o.local_id);
-    if (error) setMsg(error.message);
+    const { error } = await sb.rpc('advance_kitchen', { p_device: o.device_id, p_order: o.local_id, p_expected: o.kds_status || 'incoming', p_next: next });
+    if (error) { setMsg(error.message); return; }
     refresh();
   }
 

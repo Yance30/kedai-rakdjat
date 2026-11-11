@@ -1,61 +1,67 @@
 import { db } from './db';
-import { deviceId, loadSupabase } from './supabase';
+import { cloudProject, deviceId, loadSupabase } from './supabase';
+import { difference, snapshot, type Snapshot } from './sync-payload';
 
 export interface SyncResult {
   ok: boolean;
   msg: string;
 }
 
-export async function pushAll(): Promise<SyncResult> {
-  const sb = await loadSupabase();
-  if (!sb) return { ok: false, msg: 'Cloud belum dikonfigurasi (URL / anon key).' };
-  const dev = await deviceId();
+let flight: Promise<SyncResult> | undefined;
+export async function exclusive<T>(run: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) return navigator.locks.request('kr-sync-restore', run);
+  throw new Error('Browser perlu mendukung Web Locks melalui HTTPS.');
+}
+async function synchronize(): Promise<SyncResult> {
   try {
-    const [staff, shifts, products, tables, orders, orderItems, payments] = await Promise.all([
-      db.staff.toArray(),
-      db.shifts.toArray(),
-      db.products.toArray(),
-      db.meja.toArray(),
-      db.orders.toArray(),
-      db.orderItems.toArray(),
-      db.payments.toArray(),
+    if ((await db.settings.get('sync_paused'))?.value === 'true') throw new Error('Sync dijeda setelah restore. Periksa data lalu aktifkan kembali.');
+    const sb = await loadSupabase();
+    if (!sb) throw new Error('Cloud belum dikonfigurasi. Data tersimpan di tablet.');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) throw new Error('Login akun cloud diperlukan. Data tetap tersimpan di tablet.');
+    const dev = await deviceId();
+    const scope = `${cloudProject()}|${dev}`;
+    const current = await snapshot(dev);
+    const ack = await db.syncState.get(scope);
+    const previous: Snapshot = JSON.parse(ack?.value ?? '{}');
+    const changes = difference(current, previous);
+    await db.settings.put({ key: 'sync_pending', value: String(changes.length) });
+    // The local data and last acknowledged snapshot form a durable change queue.
+    if (changes.length || !ack) {
+      const schema = await sb.rpc('pos_schema_version');
+      if (schema.error || schema.data !== 4) throw new Error('Migrasi cloud belum sesuai. Jalankan migrasi 0002, 0003, dan 0004 yang belum diterapkan melalui Supabase SQL Editor. Data tetap tersimpan di tablet.');
+      const { error } = await sb.rpc('apply_pos_changes', { p_device: dev, p_changes: changes, p_full: !ack });
+      if (error) throw error;
+      await db.syncState.put({ key: scope, value: JSON.stringify(current) });
+    }
+    await db.settings.bulkPut([
+      { key: 'last_sync', value: String(Date.now()) }, { key: 'sync_error', value: '' }, { key: 'sync_pending', value: '0' },
     ]);
-
-    const upsert = (table: string, rows: Record<string, unknown>[]) =>
-      rows.length
-        ? sb.from(table).upsert(rows, { onConflict: 'device_id,local_id' }).then((r) => {
-            if (r.error) throw new Error(`${table}: ${r.error.message}`);
-          })
-        : Promise.resolve();
-
-    await upsert('staff', staff.map((s) => ({ device_id: dev, local_id: s.id, name: s.name, role: s.role })));
-    await upsert('shifts', shifts.map((s) => ({
-      device_id: dev, local_id: s.id, staff_local_id: s.staffId, status: s.status,
-      opened_at: s.openedAt, opening_float: s.openingFloat, closed_at: s.closedAt ?? null,
-      actual_cash: s.actualCash ?? null, note: s.note ?? null,
-    })));
-    await upsert('products', products.map((p) => ({
-      device_id: dev, local_id: p.id, name: p.name, category: p.category, price: p.price, active: p.active,
-    })));
-    await upsert('dining_tables', tables.map((t) => ({ device_id: dev, local_id: t.id, name: t.name, status: t.status })));
-    // kds_status intentionally omitted so kitchen updates in cloud are not overwritten.
-    await upsert('orders', orders.map((o) => ({
-      device_id: dev, local_id: o.id, shift_local_id: o.shiftId, status: o.status, created_at: o.createdAt,
-      subtotal: o.subtotal, service: o.service, tax: o.tax, total: o.total, order_type: o.orderType,
-      table_local_id: o.tableId ?? null,
-    })));
-    await upsert('order_items', orderItems.map((i) => ({
-      device_id: dev, local_id: i.id, order_local_id: i.orderId, product_local_id: i.productId,
-      name: i.name, qty: i.qty, price: i.price,
-    })));
-    await upsert('payments', payments.map((p) => ({
-      device_id: dev, local_id: p.id, order_local_id: p.orderId, shift_local_id: p.shiftId,
-      method: p.method, amount: p.amount, tendered: p.tendered, change: p.change, created_at: p.createdAt,
-    })));
-
-    await db.settings.put({ key: 'last_sync', value: String(Date.now()) });
     return { ok: true, msg: 'Sync ke cloud berhasil.' };
   } catch (e) {
-    return { ok: false, msg: (e as Error).message };
+    const msg = e instanceof Error ? e.message : String((e as { message?: string })?.message ?? e);
+    await db.settings.put({ key: 'sync_error', value: msg });
+    return { ok: false, msg };
   }
+}
+
+export function pushAll(): Promise<SyncResult> {
+  if (!flight) flight = exclusive(synchronize).catch(e => ({ ok: false, msg: String(e) })).finally(() => { flight = undefined; });
+  return flight;
+}
+export function startSync() {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout>;
+  let delay = 5_000;
+  const run = async () => {
+    clearTimeout(timer);
+    if (stopped) return;
+    const result = await pushAll();
+    delay = result.ok ? 5_000 : Math.min(delay * 2, 60_000);
+    if (!stopped) timer = setTimeout(run, delay);
+  };
+  const online = () => { delay = 5_000; void run(); };
+  window.addEventListener('online', online);
+  void run();
+  return () => { stopped = true; clearTimeout(timer); window.removeEventListener('online', online); };
 }

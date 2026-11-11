@@ -5,6 +5,7 @@ export interface Staff {
   name: string;
   role: Role;
   pinHash: string;
+  mustChangePin?: boolean;
 }
 
 export interface Shift {
@@ -25,6 +26,7 @@ export interface Product {
   price: number;
   active: 1 | 0;
   photo?: string;
+  soldOut?: boolean;
 }
 
 export interface Setting {
@@ -49,6 +51,14 @@ export interface Order {
   total: number;
   orderType: 'dine_in' | 'takeaway';
   tableId?: number;
+  cashierId?: number;
+  paidAt?: number;
+  costTotal?: number;
+  costComplete?: boolean;
+  stockReturned?: boolean;
+  discount?: number;
+  discountReason?: string;
+  discountApproverId?: number;
 }
 
 export interface OrderItem {
@@ -58,6 +68,7 @@ export interface OrderItem {
   name: string;
   qty: number;
   price: number;
+  costTotal?: number;
 }
 
 export interface Payment {
@@ -69,4 +80,66 @@ export interface Payment {
   tendered: number;
   change: number;
   createdAt: number;
+  requestId?: string;
+}
+
+export interface AuditEvent {
+  id?: number;
+  action: 'payment' | 'refund' | 'void' | 'shift_close' | 'receipt_copy' | 'discount';
+  orderId?: number;
+  shiftId: number;
+  actorId: number;
+  approverId?: number;
+  reason: string;
+  amount: number;
+  createdAt: number;
+}
+
+export interface CartDraft {
+  key: string;
+  shiftId: number;
+  staffId: number;
+  tableId: number | null;
+  orderId: number | null;
+  requestId: string;
+  orderType: 'dine_in' | 'takeaway';
+  lines: { product: Product; qty: number }[];
+  updatedAt: number;
+  revision: number;
+}
+export interface Ingredient {
+  id?: number;
+  name: string;
+  unit: 'g' | 'ml' | 'pcs';
+  stock: number;
+  minimum: number;
+  unitCost: number;
+  active: 0 | 1;
+}
+export interface Recipe {
+  productId: number;
+  ingredients: { ingredientId: number; qty: number }[];
+}
+export interface StockMovement {
+  id?: number;
+  ingredientId: number;
+  orderId?: number;
+  kind: 'opening' | 'purchase' | 'adjustment' | 'sale' | 'return' | 'waste' | 'stocktake';
+  qty: number;
+  unitCost: number;
+  reason: string;
+  actorId: number;
+  createdAt: number;
+}
+
+export interface Expense {
+  id?: number;
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+  actorId: number;
+  createdAt: number;
+  voidedAt?: number;
+  voidReason?: string;
 }

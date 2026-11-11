@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
-import { db, hashPin } from '../db';
+import { authenticatePin, changePin } from '../auth';
 import type { Staff } from '../types';
 
-export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
+export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => void; onCloud: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<Staff | null>(null);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [intro, setIntro] = useState(true);
@@ -22,13 +26,26 @@ export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
   }, []);
 
   async function submit() {
-    const s = await db.staff.where('pinHash').equals(hashPin(pin)).first();
-    if (s) onLogin(s);
-    else {
-      setError('PIN salah.');
-      setPin('');
-    }
+    if (busy) return;
+    setBusy(true);
+    try {
+      const s = await authenticatePin(pin);
+      if (s.mustChangePin) setPending(s); else onLogin(s);
+    } catch (e) { setError((e as Error).message); setPin(''); }
+    finally { setBusy(false); }
   }
+  if (pending) return <div className="h-full grid place-items-center p-6"><form className="max-w-sm space-y-4" onSubmit={async e => {
+    e.preventDefault(); if (busy) return; setBusy(true);
+    try {
+      if (newPin !== confirmPin) throw new Error('Konfirmasi PIN tidak sama.');
+      await changePin(pending.id!, newPin);
+      onLogin({ ...pending, mustChangePin: false });
+    } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
+  }}><h1 className="text-xl font-bold">Ganti PIN demo terlebih dahulu</h1><p>{pending.name}, buat PIN baru untuk melindungi akses tablet.</p>
+    <input aria-label="PIN baru" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="PIN baru (4–6 angka)" value={newPin} onChange={e => setNewPin(e.target.value)} />
+    <input aria-label="Ulangi PIN" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="Ulangi PIN" value={confirmPin} onChange={e => setConfirmPin(e.target.value)} />
+    {error && <p role="alert">{error}</p>}<button disabled={busy} className="bg-primary text-white rounded p-3">Simpan PIN & masuk</button>
+  </form></div>;
 
   return (
     <div className="h-full relative overflow-hidden bg-white">
@@ -50,11 +67,11 @@ export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
             <div className="kr-fade-up bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 max-w-sm text-center" style={{ animationDelay: '0.35s' }}>
               <h1 className="text-primary font-bold text-3xl mb-3">Kedai Rakdjat</h1>
               <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                Empowering culinary heritage with modern precision. The ultimate POS solution for premium service environments.
+                Pelayanan hangat, transaksi tertata. Kelola pesanan, kas, dan persediaan kedai dalam satu tempat.
               </p>
               <div className="flex justify-center gap-6 text-[11px] text-gray-500 font-semibold tracking-wide">
-                <span>⚡ FAST TRANSACTIONS</span>
-                <span>🛡️ SECURE ACCESS</span>
+                <span>TRANSAKSI CEPAT</span>
+                <span>TETAP JALAN OFFLINE</span>
               </div>
             </div>
           </div>
@@ -62,8 +79,9 @@ export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
 
         <div className="kr-slide-right w-full md:w-[420px] shrink-0 bg-white flex flex-col items-center justify-center p-8 overflow-y-auto">
           <div className="w-16 h-16 rounded-xl bg-primary text-white grid place-items-center text-3xl mb-4 shadow-md">👨‍🍳</div>
-          <h2 className="font-bold text-2xl text-ink mb-1">Welcome Back</h2>
-          <p className="text-sm text-gray-500 mb-6">Sign in to manage your branch</p>
+          <h2 className="font-bold text-2xl text-ink mb-1">Selamat Datang</h2>
+          <button className="text-sm underline mb-3" onClick={onCloud}>Login Cloud Owner / Dapur</button>
+          <p className="text-sm text-gray-500 mb-6">Masuk dengan PIN untuk mulai melayani.</p>
 
           <div className="w-full max-w-[280px]">
             <div className="h-12 rounded-xl border border-gray-300 bg-gray-50 grid place-items-center tracking-[0.5em] text-xl mb-1">
@@ -88,7 +106,7 @@ export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
             </div>
             <button
               onClick={submit}
-              disabled={pin.length < 4}
+              disabled={busy || pin.length < 4}
               className="w-full mt-4 h-12 rounded-xl bg-primary hover:bg-primary-bright text-white font-semibold disabled:opacity-40 transition-colors shadow-md"
             >
               Login →
@@ -99,15 +117,15 @@ export default function Login({ onLogin }: { onLogin: (s: Staff) => void }) {
           <div className="flex items-center gap-4 text-xs text-gray-500 mt-8">
             <span>🏬 Main Branch</span>
             <span>
-              System Status:{' '}
+              Koneksi:{' '}
               <span className={online ? 'text-green-600 font-semibold' : 'text-primary-bright font-semibold'}>
                 {online ? 'Online' : 'Offline'}
               </span>
             </span>
           </div>
           <div className="text-center text-[11px] text-gray-400 mt-6">
-            © 2024 Kedai Rakdjat Enterprise. All Rights Reserved.
-            <div className="text-primary-bright font-semibold mt-1">v2.4.0</div>
+            Kedai Rakdjat · Sistem Kasir
+            <div className="text-primary-bright font-semibold mt-1">Data transaksi tersimpan di perangkat ini</div>
           </div>
         </div>
       </div>

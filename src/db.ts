@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie';
-import type { DiningTable, Order, OrderItem, Payment, Product, Setting, Shift, Staff } from './types';
+import type { AuditEvent, DiningTable, Order, OrderItem, Payment, Product, Setting, Shift, Staff } from './types';
+import type { CartDraft, Ingredient, Recipe, StockMovement, Expense } from './types';
 
 export function hashPin(pin: string): string {
   let h = 5381;
@@ -21,6 +22,14 @@ export class PosDB extends Dexie {
   payments!: Table<Payment, number>;
   settings!: Table<Setting, string>;
   meja!: Table<DiningTable, number>;
+  audit!: Table<AuditEvent, number>;
+  syncState!: Table<{ key: string; value: string }, string>;
+  recovery!: Table<{ id?: number; createdAt: number; data: string }, number>;
+  drafts!: Table<CartDraft, string>;
+  ingredients!: Table<Ingredient, number>;
+  recipes!: Table<Recipe, number>;
+  stockMovements!: Table<StockMovement, number>;
+  expenses!: Table<Expense, number>;
 
   constructor() {
     super('kedai-rakdjat-pos');
@@ -42,6 +51,19 @@ export class PosDB extends Dexie {
       const t = tx as unknown as PosDB;
       t.meja.bulkAdd(seedTables());
     });
+    this.version(4).stores({
+      payments: '++id, orderId, shiftId, method, &requestId',
+      audit: '++id, orderId, shiftId, action',
+      syncState: 'key',
+      recovery: '++id, createdAt',
+    });
+    this.version(5).stores({
+      drafts: 'key, shiftId, staffId, tableId',
+      ingredients: '++id, name, active',
+      recipes: 'productId',
+      stockMovements: '++id, ingredientId, orderId, createdAt',
+    });
+    this.version(6).stores({ expenses: '++id, date, actorId' });
     this.on('populate', (tx) => {
       const t = tx as unknown as PosDB;
       t.staff.bulkAdd([
