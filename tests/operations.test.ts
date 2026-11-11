@@ -184,3 +184,42 @@ describe('ack sinkronisasi ringkas', () => {
     expect(changes).toContainEqual({ table: 'order_items', op: 'delete', row: { device_id: 'test', local_id: 1 } });
   });
 });
+
+describe('penguncian PIN bertingkat', () => {
+  it('kunci makin lama, login benar tidak mereset tingkat, dan reda setelah 6 jam', async () => {
+    const { pinLockLog } = await import('../src/auth');
+    let now = 1_000_000_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      const fiveWrong = async () => { for (let i = 0; i < 5; i++) await expect(authenticatePin('0000', false, 2)).rejects.toThrow('PIN salah'); };
+      await fiveWrong();
+      await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 1 menit');
+      now += 60_001;
+      await fiveWrong();
+      await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 5 menit');
+      now += 5 * 60_000 + 1;
+      expect((await authenticatePin('1111', false, 2)).name).toBe('Sari'); // login benar
+      await fiveWrong();
+      await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 15 menit');
+      expect((await pinLockLog()).map(e => e.level)).toEqual([3, 2, 1]);
+      now += 7 * 60 * 60_000;
+      await fiveWrong();
+      await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 1 menit');
+    } finally { clock.mockRestore(); }
+  }, 60_000);
+});
+
+describe('restore backup dengan hash PIN lama', () => {
+  it('staf dengan hash lama wajib ganti PIN setelah restore, walau PIN-nya bukan PIN demo', async () => {
+    const { hashPin } = await import('../src/db');
+    const { legacyPinStaff } = await import('../src/backup');
+    await db.staff.update(2, { pinHash: hashPin('4321') });
+    await db.staff.update(1, { pinHash: await secureHash('987654') });
+    const backup = await createBackup();
+    expect(legacyPinStaff(backup)).toEqual(['Sari']);
+    await restoreBackup(backup);
+    expect((await db.staff.get(1))?.mustChangePin).toBeFalsy();
+    const sari = await authenticatePin('4321', false, 2);
+    expect(sari.mustChangePin).toBe(true); expect(sari.pinHash).toMatch(/^pbkdf2/);
+  });
+});

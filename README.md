@@ -85,7 +85,9 @@ Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of th
 ## Security notes
 
 - Secrets are never committed: `.env` and data backups are gitignored.
-- PINs migrate to salted PBKDF2 hashes on successful login and are excluded from cloud sync. Failed PIN attempts are rate limited locally.
+- PINs migrate to salted PBKDF2 hashes on successful login and are excluded from cloud sync. Every 5 wrong PINs lock the device for longer (1 → 5 → 15 → 60 minutes); lockouts are listed under **Pengaturan → Riwayat Penguncian PIN**.
+- Staff restored from a backup with an old-format PIN hash must set a new PIN at their next login.
+- CI (GitHub Actions) runs unit, cloud-migration and browser tests plus the production build on every push to `main` and every pull request.
 - Migration `0002_secure_sync.sql` removes permissive anonymous access. Authenticated device memberships restrict owner/cashier/kitchen roles. Public API keys are not secrets. Cloud writes use authorized atomic RPCs and generate a server-side audit trail.
 - See [deployment, recovery, and verification instructions](docs/production-setup.md). Applying the code does not automatically migrate a live Supabase project.
 

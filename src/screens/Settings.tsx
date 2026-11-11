@@ -1,13 +1,35 @@
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
-import { changePin } from '../auth';
-import { createBackup, downloadBackup, parseBackup, restoreBackup } from '../backup';
+import { changePin, pinLockLog } from '../auth';
+import { createBackup, downloadBackup, legacyPinStaff, parseBackup, restoreBackup } from '../backup';
 import CloudAccess from '../components/CloudAccess';
 import Diagnostics from '../components/Diagnostics';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
+
+function PinLockHistory() {
+  const log = useLiveQuery(() => pinLockLog(), []) ?? [];
+  const names = useLiveQuery(async () => new Map((await db.staff.toArray()).map(s => [s.id, s.name])), []);
+  const waktu = (t: number) => new Date(t).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' });
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+      <h2 className="font-semibold mb-2">Riwayat Penguncian PIN</h2>
+      <p className="text-xs text-gray-500 mb-3">Perangkat terkunci setelah 5 PIN salah berturut-turut: 1, 5, 15, lalu 60 menit. Penguncian yang sering bisa berarti ada yang mencoba menebak PIN.</p>
+      {log.length === 0 ? <p className="text-sm text-gray-500">Belum pernah terkunci.</p> : (
+        <ul className="text-sm divide-y">
+          {log.slice(0, 10).map((e) => (
+            <li key={e.at} className="py-2 flex justify-between gap-3">
+              <span>{waktu(e.at)} · {e.ownerOnly ? 'otorisasi owner' : `login ${e.staffId !== undefined ? names?.get(e.staffId) ?? `staf #${e.staffId}` : ''}`}</span>
+              <span className="text-gray-500">dikunci {Math.round((e.until - e.at) / 60_000)} menit</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 function readImage(file: File): Promise<string> {
   return new Promise((res, rej) => {
@@ -76,7 +98,9 @@ export default function Settings({ staff }: { staff: Staff }) {
     try {
       if (file.size > 30_000_000) throw new Error('File melebihi 30 MB.');
       const backup = parseBackup(await file.text());
-      if (!confirm('File valid: ' + backup.data.orders.length + ' pesanan. Data akan diganti dan salinan pemulihan disimpan. Lanjutkan?')) return;
+      const weak = legacyPinStaff(backup);
+      const weakNote = weak.length ? `\n\nPIN ${weak.join(', ')} memakai format lama yang lemah dan wajib diganti saat login berikutnya. Simpan file backup ini di tempat aman.` : '';
+      if (!confirm(`File valid: ${backup.data.orders.length} pesanan. Data akan diganti dan salinan pemulihan disimpan.${weakNote}\n\nLanjutkan?`)) return;
       await restoreBackup(backup);
       window.location.reload();
     } catch (e) { setMsg((e as Error).message); }
@@ -215,6 +239,7 @@ export default function Settings({ staff }: { staff: Staff }) {
               ))}
             </div>
           </section>
+          <PinLockHistory />
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Backup Data</h2>
             <button className="text-sm underline mb-3" onClick={async () => { const saved = await db.recovery.orderBy('id').last(); if (saved) downloadBackup(JSON.parse(saved.data), 'sebelum-restore'); else setMsg('Belum ada salinan sebelum restore.'); }}>Unduh salinan sebelum restore terakhir</button>

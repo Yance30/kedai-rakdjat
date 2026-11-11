@@ -21,6 +21,9 @@ export async function createBackup(): Promise<Backup> {
     },
   }));
 }
+export const isLegacyHash = (hash: string) => !hash.startsWith('pbkdf2$');
+/** Staff whose PIN hash in this backup uses the old weak format (they must set a new PIN after restore). */
+export const legacyPinStaff = (backup: Backup) => backup.data.staff.filter(s => isLegacyHash(s.pinHash)).map(s => s.name);
 function fail(message: string): never { throw new Error(`Backup ditolak: ${message}`); }
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const integer = (v: unknown, min = 0): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min;
@@ -101,7 +104,8 @@ export async function restoreBackup(input: Backup) {
       await db.recovery.add({ createdAt: Date.now(), data: JSON.stringify(recovery) });
       const d = backup.data;
       for (const t of businessTables()) if (t !== db.settings) await t.clear();
-      await db.staff.bulkAdd(d.staff); await db.shifts.bulkAdd(d.shifts); await db.products.bulkAdd(d.products);
+      // Legacy 32-bit PIN hashes are trivially reversible from the backup file, so those PINs must be replaced.
+      await db.staff.bulkAdd(d.staff.map(s => isLegacyHash(s.pinHash) ? { ...s, mustChangePin: true } : s)); await db.shifts.bulkAdd(d.shifts); await db.products.bulkAdd(d.products);
       await db.orders.bulkAdd(d.orders); await db.orderItems.bulkAdd(d.orderItems); await db.payments.bulkAdd(d.payments);
       await db.meja.bulkAdd(d.tables); await db.audit.bulkAdd(d.audit);
       await db.ingredients.bulkAdd(d.ingredients); await db.recipes.bulkAdd(d.recipes); await db.stockMovements.bulkAdd(d.stockMovements);
