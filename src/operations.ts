@@ -14,20 +14,30 @@ export async function saveProduct(input: Product, actorId: number) {
     return db.products.put({ ...input, name: input.name.trim(), category: input.category.trim() });
   });
 }
-export async function addExpense(input: Pick<Expense,'date'|'category'|'description'|'amount'>, actorId: number) {
+export async function addExpense(input: Pick<Expense,'date'|'category'|'description'|'amount'>, actorId: number, fromDrawer = false) {
   rangeBounds(input.date,input.date);
   if (!input.category.trim() || input.description.trim().length < 3 || !Number.isSafeInteger(input.amount) || input.amount <= 0 || input.amount > 1e12) throw new Error('Isi kategori, keterangan dan nominal pengeluaran yang valid.');
-  return db.transaction('rw',[db.expenses,db.staff],async()=>{
+  return db.transaction('rw',[db.expenses,db.staff,db.shifts],async()=>{
     await owner(actorId);
-    return db.expenses.add({...input,description:input.description.trim(),actorId,createdAt:Date.now()});
+    let shiftId: number | undefined;
+    if (fromDrawer) {
+      shiftId = (await db.shifts.where('status').equals('open').first())?.id;
+      if (!shiftId) throw new Error('Tidak ada shift terbuka. Pengeluaran dari laci kas hanya bisa dicatat saat shift berjalan.');
+    }
+    return db.expenses.add({...input,description:input.description.trim(),actorId,createdAt:Date.now(),...(shiftId ? {shiftId} : {})});
   });
+}
+/** Cash paid out of the drawer during a shift (voided expenses excluded). */
+export async function drawerExpenses(shiftId: number) {
+  return (await db.expenses.where('shiftId').equals(shiftId).toArray()).filter(e => !e.voidedAt).reduce((s, e) => s + e.amount, 0);
 }
 export async function voidExpense(id: number, reason: string, actorId: number) {
   if (reason.trim().length < 5) throw new Error('Alasan pembatalan minimal 5 karakter.');
-  return db.transaction('rw',[db.expenses,db.staff],async()=>{
+  return db.transaction('rw',[db.expenses,db.staff,db.shifts],async()=>{
     await owner(actorId);
     const row=await db.expenses.get(id);
     if (!row || row.voidedAt) throw new Error('Pengeluaran sudah dibatalkan atau tidak ditemukan.');
+    if (row.shiftId && (await db.shifts.get(row.shiftId))?.status !== 'open') throw new Error('Pengeluaran dari laci kas shift yang sudah ditutup tidak dapat dibatalkan.');
     await db.expenses.update(id,{voidedAt:Date.now(),voidReason:reason.trim()});
   });
 }

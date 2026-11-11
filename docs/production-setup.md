@@ -1,12 +1,12 @@
 # Penerapan keamanan dan keandalan POS
 
-Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 4](operasional.md).
+Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 5](operasional.md).
 
 Perubahan aplikasi tersedia di repository. Migrasi SQL tidak otomatis diterapkan ke proyek Supabase. Backup data tablet dan database cloud sebelum penerapan. Lakukan di luar jam transaksi dan tutup tab aplikasi versi lama agar tidak memakai jalur sinkronisasi lama.
 
 ## 1. Database dan akun cloud
 
-1. Untuk proyek baru, jalankan `supabase/migrations/0001_init.sql`, lalu `0002_secure_sync.sql`, `0003_inventory_reporting.sql`, dan `0004_operations.sql` sebelum menghubungkan aplikasi. Untuk proyek versi awal yang sudah memiliki tabel POS, jalankan 0002 lalu 0003 lalu 0004. Jangan mengulang migrasi yang sudah berhasil. Masing-masing migrasi berjalan dalam satu transaksi. File 0002, 0003 dan 0004 juga bisa diunduh dari Pengaturan bagian diagnostik. Buka proyek yang sesuai di dashboard Supabase, pilih SQL Editor, tempel isi file dan jalankan berurutan. Dashboard yang terbuka belum membuktikan migrasi selesai.
+1. Untuk proyek baru, jalankan `supabase/migrations/0001_init.sql`, lalu `0002_secure_sync.sql`, `0003_inventory_reporting.sql`, `0004_operations.sql`, dan `0005_drawer_expenses.sql` sebelum menghubungkan aplikasi. Untuk proyek versi awal yang sudah memiliki tabel POS, jalankan 0002 lalu 0003 lalu 0004 lalu 0005. Jangan mengulang migrasi yang sudah berhasil. Masing-masing migrasi berjalan dalam satu transaksi. File 0002 sampai 0005 juga bisa diunduh dari Pengaturan bagian diagnostik. Buka proyek yang sesuai di dashboard Supabase, pilih SQL Editor, tempel isi file dan jalankan berurutan. Dashboard yang terbuka belum membuktikan migrasi selesai.
 2. Buat akun email/password owner, cashier, dan kitchen melalui Supabase Authentication. Tidak ada pendaftaran mandiri dari aplikasi.
 3. Catat UUID masing-masing akun dari Authentication. Catat **ID tablet ini** dari Pengaturan → Akun Cloud pada tablet kasir.
 4. Jalankan SQL berikut sebagai administrator, mengganti placeholder dengan UUID dan ID tablet yang benar:

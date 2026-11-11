@@ -41,17 +41,50 @@ export async function snapshot(dev: string): Promise<Snapshot> {
     collect('ingredients', (await db.ingredients.toArray()).map(i => ({ device_id: dev, local_id: i.id, name: i.name, unit: i.unit, stock: i.stock, minimum: i.minimum, unit_cost: i.unitCost, active: i.active })));
     collect('recipes', (await db.recipes.toArray()).map(r => ({ device_id: dev, local_id: r.productId, ingredients: r.ingredients })));
     collect('stock_movements', (await db.stockMovements.toArray()).map(m => ({ device_id: dev, local_id: m.id, ingredient_local_id: m.ingredientId, order_local_id: m.orderId ?? null, kind: m.kind, qty: m.qty, unit_cost: m.unitCost, reason: m.reason, actor_local_id: m.actorId, created_at: m.createdAt })));
-    collect('expenses',(await db.expenses.toArray()).map(e=>({device_id:dev,local_id:e.id,date:e.date,category:e.category,description:e.description,amount:e.amount,actor_local_id:e.actorId,created_at:e.createdAt,voided_at:e.voidedAt??null,void_reason:e.voidReason??null})));
+    collect('expenses',(await db.expenses.toArray()).map(e=>({device_id:dev,local_id:e.id,date:e.date,category:e.category,description:e.description,amount:e.amount,actor_local_id:e.actorId,created_at:e.createdAt,voided_at:e.voidedAt??null,void_reason:e.voidReason??null,shift_local_id:e.shiftId??null})));
     return result;
   });
 }
-export function difference(current: Snapshot, previous: Snapshot) {
+/**
+ * Acknowledged state: table -> local_id -> row signature. Storing a short hash per row
+ * (instead of the whole row, including base64 menu photos) keeps the ack small.
+ */
+export type Ack = Record<string, Record<string, string>>;
+
+// cyrb53: fast 53-bit string hash; combined with the length, collisions are negligible here.
+function cyrb53(s: string) {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+const signature = (row: Record<string, unknown>) => { const s = JSON.stringify(row); return `${s.length}:${cyrb53(s)}`; };
+
+export function acknowledge(current: Snapshot): Ack {
+  return Object.fromEntries(Object.entries(current).map(([table, rows]) => [table, Object.fromEntries(rows.map(r => [String(r.local_id), signature(r)]))]));
+}
+/** Accepts the compact ack, or a full snapshot stored by older app versions. */
+function toAck(previous: Snapshot | Ack): Ack {
+  return Object.fromEntries(Object.entries(previous).map(([table, rows]) => [table, Array.isArray(rows)
+    ? Object.fromEntries(rows.map(r => [String(r.local_id), signature(r)]))
+    : rows]));
+}
+export function difference(current: Snapshot, previous: Snapshot | Ack, dev?: string) {
+  const ack = toAck(previous);
+  const device = dev ?? Object.values(current).flat()[0]?.device_id
+    ?? Object.values(previous).flatMap(rows => Array.isArray(rows) ? rows : [])[0]?.device_id;
   return Object.entries(current).flatMap(([table, rows]) => {
-    const old = new Map((previous[table] ?? []).map(r => [r.local_id, JSON.stringify(r)]));
-    const ids = new Set(rows.map(r => r.local_id));
+    const old = ack[table] ?? {};
+    const ids = new Set(rows.map(r => String(r.local_id)));
     return [
-      ...rows.filter(r => old.get(r.local_id) !== JSON.stringify(r)).map(row => ({ table, op: 'put', row })),
-      ...(previous[table] ?? []).filter(r => !ids.has(r.local_id)).map(row => ({ table, op: 'delete', row })),
+      ...rows.filter(r => old[String(r.local_id)] !== signature(r)).map(row => ({ table, op: 'put', row })),
+      // The server only needs the row identity to delete it.
+      ...Object.keys(old).filter(id => !ids.has(id)).map(id => ({ table, op: 'delete', row: { device_id: device, local_id: Number(id) } })),
     ];
   });
 }

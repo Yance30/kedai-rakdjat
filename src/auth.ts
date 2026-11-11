@@ -23,13 +23,19 @@ export async function verifyPin(pin: string, stored: string) {
 }
 let checking = false;
 // This is an offline device lock, not a substitute for server-side authorization.
-export async function authenticatePin(pin: string, ownerOnly = false): Promise<Staff> {
+/**
+ * Each PBKDF2 check costs ~0.5–1 s on a mid-range tablet, so pass `staffId` (staff picked on the
+ * login screen) to verify a single hash instead of trying every staff member in turn.
+ */
+export async function authenticatePin(pin: string, ownerOnly = false, staffId?: number): Promise<Staff> {
   if (checking) throw new Error('Pemeriksaan PIN sedang berjalan.');
   checking = true;
   try {
     const state = JSON.parse((await db.settings.get('pin_attempts'))?.value ?? '{"failures":0,"until":0}');
     if (Date.now() < state.until) throw new Error('Terlalu banyak percobaan. Tunggu satu menit.');
-    const staff = ownerOnly ? await db.staff.where('role').equals('owner').toArray() : await db.staff.toArray();
+    const pool = staffId !== undefined ? [await db.staff.get(staffId)].filter((s): s is Staff => !!s)
+      : ownerOnly ? await db.staff.where('role').equals('owner').toArray() : await db.staff.toArray();
+    const staff = ownerOnly ? pool.filter(s => s.role === 'owner') : pool;
     let match: Staff | undefined;
     for (const person of staff) if (await verifyPin(pin, person.pinHash)) { match = person; break; }
     if (!match) {

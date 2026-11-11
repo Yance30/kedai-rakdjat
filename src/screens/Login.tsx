@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { authenticatePin, changePin } from '../auth';
+import { db } from '../db';
 import type { Staff } from '../types';
 
 export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => void; onCloud: () => void }) {
@@ -11,6 +13,10 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
   const [error, setError] = useState('');
   const [intro, setIntro] = useState(true);
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  // Only names and roles are needed here; PIN hashes stay out of component state.
+  const staff = useLiveQuery(async () => (await db.staff.toArray()).map(s => ({ id: s.id!, name: s.name, role: s.role })), []) ?? [];
+  const [picked, setPicked] = useState<number | null>(null);
+  const selected = staff.length === 1 ? staff[0].id : picked;
 
   useEffect(() => {
     const t = setTimeout(() => setIntro(false), 1950);
@@ -26,10 +32,10 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
   }, []);
 
   async function submit() {
-    if (busy) return;
+    if (busy || !selected) return;
     setBusy(true);
     try {
-      const s = await authenticatePin(pin);
+      const s = await authenticatePin(pin, false, selected);
       if (s.mustChangePin) setPending(s); else onLogin(s);
     } catch (e) { setError((e as Error).message); setPin(''); }
     finally { setBusy(false); }
@@ -81,9 +87,23 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
           <div className="w-16 h-16 rounded-xl bg-primary text-white grid place-items-center text-3xl mb-4 shadow-md">👨‍🍳</div>
           <h2 className="font-bold text-2xl text-ink mb-1">Selamat Datang</h2>
           <button className="text-sm underline mb-3" onClick={onCloud}>Login Cloud Owner / Dapur</button>
-          <p className="text-sm text-gray-500 mb-6">Masuk dengan PIN untuk mulai melayani.</p>
+          <p className="text-sm text-gray-500 mb-4">Pilih nama Anda, lalu masukkan PIN.</p>
 
           <div className="w-full max-w-[280px]">
+            <div role="group" aria-label="Pilih staf" className="flex flex-wrap justify-center gap-2 mb-4">
+              {staff.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  aria-pressed={selected === s.id}
+                  onClick={() => { setPicked(s.id); setError(''); }}
+                  className={`px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${selected === s.id ? 'bg-primary text-white border-primary' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
+                >
+                  {s.name}
+                  <span className={`block text-[11px] font-normal ${selected === s.id ? 'text-white/80' : 'text-gray-500'}`}>{s.role === 'owner' ? 'Owner' : 'Kasir'}</span>
+                </button>
+              ))}
+            </div>
             <div className="h-12 rounded-xl border border-gray-300 bg-gray-50 grid place-items-center tracking-[0.5em] text-xl mb-1">
               {pin ? '•'.repeat(pin.length) : <span className="text-gray-400 text-sm tracking-normal">Masukkan PIN</span>}
             </div>
@@ -106,7 +126,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
             </div>
             <button
               onClick={submit}
-              disabled={busy || pin.length < 4}
+              disabled={busy || pin.length < 4 || !selected}
               className="w-full mt-4 h-12 rounded-xl bg-primary hover:bg-primary-bright text-white font-semibold disabled:opacity-40 transition-colors shadow-md"
             >
               Login →

@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { authenticatePin } from '../auth';
 import { closeShift } from '../transactions';
+import { drawerExpenses } from '../operations';
 import { pushAll } from '../sync';
 import { rupiah } from '../money';
 import { BarChart, DonutChart } from '../components/Charts';
@@ -16,6 +17,7 @@ const jam = (t: number) =>
 export default function Report({ shift, actorId, onClosed }: { shift: Shift; actorId: number; onClosed: () => void }) {
   const orders = useLiveQuery(() => db.orders.where('shiftId').equals(shift.id!).toArray(), [shift.id]) ?? [];
   const payments = useLiveQuery(() => db.payments.where('shiftId').equals(shift.id!).toArray(), [shift.id]) ?? [];
+  const cashOut = useLiveQuery(() => drawerExpenses(shift.id!), [shift.id]) ?? 0;
   const [counts, setCounts] = useState<Record<number, string>>({});
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
@@ -31,7 +33,7 @@ export default function Report({ shift, actorId, onClosed }: { shift: Shift; act
   const qrisTotal = qrisPayments.reduce((s, p) => s + p.amount, 0);
 
   const physical = DENOMS.reduce((s, d) => s + d * (Number(counts[d]) || 0), 0);
-  const expected = shift.openingFloat + cashTotal;
+  const expected = shift.openingFloat + cashTotal - cashOut;
   const diff = physical - expected;
 
   const hourMap = new Map<number, number>();
@@ -163,9 +165,15 @@ export default function Report({ shift, actorId, onClosed }: { shift: Shift; act
       <div className="bg-white rounded-xl border border-gray-200 p-6 max-w-xl">
         <h2 className="font-semibold mb-4">Rekonsiliasi & Tutup Shift</h2>
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-500">Kas diharapkan (modal + tunai)</span>
+          <span className="text-gray-500">{cashOut ? 'Kas diharapkan (modal + tunai − pengeluaran laci)' : 'Kas diharapkan (modal + tunai)'}</span>
           <span className="font-semibold">{rupiah(expected)}</span>
         </div>
+        {cashOut > 0 && (
+          <div className="flex justify-between text-sm mb-2">
+            <span className="text-gray-500">Pengeluaran dibayar dari laci</span>
+            <span className="font-semibold">−{rupiah(cashOut)}</span>
+          </div>
+        )}
         <div className="flex justify-between text-sm mb-2">
           <span className="text-gray-500">Hitungan fisik</span>
           <span className="font-semibold">{rupiah(physical)}</span>

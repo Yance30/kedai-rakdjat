@@ -142,4 +142,6 @@ export interface Expense {
   createdAt: number;
   voidedAt?: number;
   voidReason?: string;
+  /** Set when the cash was taken from the drawer of this (open) shift. */
+  shiftId?: number;
 }

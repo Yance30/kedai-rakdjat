@@ -64,6 +64,7 @@ export class PosDB extends Dexie {
       stockMovements: '++id, ingredientId, orderId, createdAt',
     });
     this.version(6).stores({ expenses: '++id, date, actorId' });
+    this.version(7).stores({ expenses: '++id, date, actorId, shiftId' });
     this.on('populate', (tx) => {
       const t = tx as unknown as PosDB;
       t.staff.bulkAdd([

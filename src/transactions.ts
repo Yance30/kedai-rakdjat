@@ -2,6 +2,7 @@ import { authenticatePin } from './auth';
 import { db } from './db';
 import type { Order, OrderItem, Payment } from './types';
 import { consumeRecipe, returnOrderStock } from './inventory';
+import { drawerExpenses } from './operations';
 
 export function validateSale(order: Order, items: Omit<OrderItem, 'id' | 'orderId'>[]) {
   const money = [order.subtotal, order.service, order.tax, order.total, ...items.map(i => i.price)];
@@ -73,7 +74,7 @@ export async function reverseOrder(orderId: number, actorId: number, approverId:
 
 export async function closeShift(shiftId: number, actorId: number, physical: number, approverId?: number) {
   if (!Number.isSafeInteger(physical) || physical < 0) throw new Error('Hitungan kas tidak valid.');
-  return db.transaction('rw', [db.shifts, db.orders, db.payments, db.staff, db.audit, db.drafts], async () => {
+  return db.transaction('rw', [db.shifts, db.orders, db.payments, db.staff, db.audit, db.drafts, db.expenses], async () => {
     const shift = await db.shifts.get(shiftId);
     if (!shift || shift.status !== 'open') throw new Error('Shift sudah ditutup.');
     const orders = await db.orders.where('shiftId').equals(shiftId).toArray();
@@ -81,10 +82,11 @@ export async function closeShift(shiftId: number, actorId: number, physical: num
     if (await db.drafts.where('shiftId').equals(shiftId).and(d => d.lines.length > 0).count()) throw new Error('Masih ada keranjang tersimpan. Bayar atau kosongkan dahulu.');
     const paid = new Set(orders.filter(o => o.status === 'paid').map(o => o.id));
     const payments = await db.payments.where('shiftId').equals(shiftId).toArray();
-    const expected = shift.openingFloat + payments.filter(p => p.method === 'cash' && paid.has(p.orderId)).reduce((s, p) => s + p.amount, 0);
+    const cashOut = await drawerExpenses(shiftId);
+    const expected = shift.openingFloat + payments.filter(p => p.method === 'cash' && paid.has(p.orderId)).reduce((s, p) => s + p.amount, 0) - cashOut;
     const diff = physical - expected;
     if (diff !== 0 && (!approverId || (await db.staff.get(approverId))?.role !== 'owner')) throw new Error('Selisih kas membutuhkan persetujuan owner.');
     await db.shifts.update(shiftId, { status: 'closed', closedAt: Date.now(), actualCash: physical, note: `Selisih Rp ${diff}` });
-    await db.audit.add({ action: 'shift_close', shiftId, actorId, approverId, amount: diff, reason: `Kas diharapkan ${expected}; fisik ${physical}`, createdAt: Date.now() });
+    await db.audit.add({ action: 'shift_close', shiftId, actorId, approverId, amount: diff, reason: `Kas diharapkan ${expected}; fisik ${physical}${cashOut ? `; pengeluaran laci ${cashOut}` : ''}`, createdAt: Date.now() });
   });
 }

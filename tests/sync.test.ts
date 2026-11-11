@@ -6,7 +6,7 @@ vi.mock('../src/supabase', () => ({ cloudProject: () => 'project', deviceId: asy
 import { pushAll } from '../src/sync';
 beforeEach(async () => {
   await db.delete(); await db.open();
-  mocks.rpc.mockReset().mockImplementation(async (name: string) => ({ error: null, data: name === 'pos_schema_version' ? 4 : null }));
+  mocks.rpc.mockReset().mockImplementation(async (name: string) => ({ error: null, data: name === 'pos_schema_version' ? 5 : null }));
   mocks.getSession.mockResolvedValue({ data: { session: { user: {} } } });
   // Node's Web Locks implementation serializes simultaneous sync requests.
 });
@@ -33,7 +33,7 @@ it('tanpa login atau setelah restore tidak melakukan RPC', async () => {
 });
 it('perubahan saat RPC berlangsung tetap dikirim pada putaran berikutnya', async () => {
   mocks.rpc.mockImplementation(async (name: string) => {
-    if (name === 'pos_schema_version') return { error: null, data: 4 };
+    if (name === 'pos_schema_version') return { error: null, data: 5 };
     await db.products.update(1, { name: 'Berubah saat sync' });
     return { error: null };
   });
@@ -47,4 +47,16 @@ it('schema lama tidak mengakui antrean atau mengirim data parsial', async () => 
   expect((await pushAll()).ok).toBe(false);
   expect(await db.syncState.count()).toBe(0);
   expect(mocks.rpc.mock.calls.every(call => call[0] === 'pos_schema_version')).toBe(true);
+});
+it('pemicu sync hanya bereaksi pada tabel bisnis dan pengaturan sync tertentu', async () => {
+  const { touchesSyncedData } = await import('../src/sync');
+  const { RangeSet } = await import('dexie');
+  const part = (table: string, keys: (string | number)[] = [1]) => ({ [`idb://${db.name}/${table}/`]: new RangeSet().addKeys(keys) });
+  expect(touchesSyncedData(part('orders'))).toBe(true);
+  expect(touchesSyncedData(part('drafts', ['k']))).toBe(false);
+  expect(touchesSyncedData(part('syncState', ['k']))).toBe(false);
+  expect(touchesSyncedData(part('settings', ['last_sync', 'sync_pending', 'sync_error']))).toBe(false);
+  expect(touchesSyncedData(part('settings', ['sync_paused']))).toBe(true);
+  // Mutations relayed from another tab arrive as plain objects without RangeSet methods.
+  expect(touchesSyncedData(JSON.parse(JSON.stringify(part('settings', ['supabase_url']))))).toBe(true);
 });

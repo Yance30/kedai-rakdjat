@@ -129,3 +129,58 @@ describe('PIN', () => {
     await expect(authenticatePin('1234')).rejects.toThrow('Tunggu');
   });
 });
+
+describe('pengeluaran dari laci kas', () => {
+  it('mengurangi kas yang diharapkan saat tutup shift, dan pembatalan mengembalikannya', async () => {
+    await sale(); // tunai 11000
+    const { addExpense, voidExpense } = await import('../src/operations');
+    const id = await addExpense({ date: '2026-11-11', category: 'Lainnya', description: 'Beli es batu', amount: 5000 }, 1, true);
+    expect((await db.expenses.get(id))?.shiftId).toBe(1);
+    await addExpense({ date: '2026-11-11', category: 'Listrik', description: 'Token listrik', amount: 50000 }, 1); // bukan dari laci
+    await expect(closeShift(1, 2, 11000)).rejects.toThrow('persetujuan');
+    await closeShift(1, 2, 6000);
+    expect(await db.audit.where('action').equals('shift_close').first()).toMatchObject({ amount: 0 });
+    await expect(voidExpense(id, 'Salah catat', 1)).rejects.toThrow('sudah ditutup');
+  });
+  it('pengeluaran laci yang dibatalkan tidak mengurangi kas; tanpa shift terbuka ditolak', async () => {
+    const { addExpense, voidExpense } = await import('../src/operations');
+    const id = await addExpense({ date: '2026-11-11', category: 'Lainnya', description: 'Beli es batu', amount: 5000 }, 1, true);
+    await voidExpense(id, 'Salah catat', 1);
+    await closeShift(1, 2, 0);
+    await expect(addExpense({ date: '2026-11-11', category: 'Lainnya', description: 'Beli gas', amount: 5000 }, 1, true)).rejects.toThrow('shift terbuka');
+  });
+  it('backup dengan shift pengeluaran tidak dikenal ditolak', async () => {
+    const { addExpense } = await import('../src/operations');
+    await addExpense({ date: '2026-11-11', category: 'Lainnya', description: 'Beli es batu', amount: 5000 }, 1, true);
+    const backup = await createBackup();
+    expect(() => parseBackup(JSON.stringify(backup))).not.toThrow();
+    backup.data.expenses[0].shiftId = 99;
+    expect(() => parseBackup(JSON.stringify(backup))).toThrow('pengeluaran');
+  });
+});
+
+describe('login per staf', () => {
+  it('hanya memeriksa PIN staf yang dipilih', async () => {
+    await expect(authenticatePin('1234', false, 2)).rejects.toThrow('PIN salah');
+    await db.settings.delete('pin_attempts');
+    expect((await authenticatePin('1111', false, 2)).name).toBe('Sari');
+    await expect(authenticatePin('1111', true, 2)).rejects.toThrow('PIN salah');
+  });
+});
+
+describe('ack sinkronisasi ringkas', () => {
+  it('ack berisi tanda tangan, kompatibel dengan snapshot lama, dan delete hanya berisi identitas', async () => {
+    const { acknowledge } = await import('../src/sync-payload');
+    await sale(); const before = await snapshot('test');
+    const ack = acknowledge(before);
+    expect(JSON.stringify(ack).length).toBeLessThan(JSON.stringify(before).length);
+    expect(difference(before, ack)).toEqual([]);
+    await db.products.update(1, { price: 99000 });
+    await db.orderItems.clear();
+    const after = await snapshot('test');
+    const changes = difference(after, ack, 'test');
+    expect(changes).toEqual(difference(after, before, 'test'));
+    expect(changes).toContainEqual({ table: 'products', op: 'put', row: expect.objectContaining({ price: 99000 }) });
+    expect(changes).toContainEqual({ table: 'order_items', op: 'delete', row: { device_id: 'test', local_id: 1 } });
+  });
+});

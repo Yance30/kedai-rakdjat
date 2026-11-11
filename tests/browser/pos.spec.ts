@@ -1,7 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-async function login(page: Page, pin: string) {
+async function login(page: Page, pin: string, staff = 'Budi Santoso') {
+  await page.getByRole('button', { name: new RegExp('^' + staff) }).click();
   for (const digit of pin) await page.getByRole('button', { name: digit, exact: true }).click();
   await page.getByRole('button', { name: /^Login →/ }).click();
 }

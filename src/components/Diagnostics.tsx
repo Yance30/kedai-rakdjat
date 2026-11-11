@@ -7,6 +7,8 @@ import migration2 from '../../supabase/migrations/0002_secure_sync.sql?raw';
 import migration3 from '../../supabase/migrations/0003_inventory_reporting.sql?raw';
 
 import migration4 from '../../supabase/migrations/0004_operations.sql?raw';
+import migration5 from '../../supabase/migrations/0005_drawer_expenses.sql?raw';
+import { SCHEMA_VERSION } from '../sync';
 
 function downloadSql(text: string, filename: string) {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
@@ -25,7 +27,7 @@ export default function Diagnostics() {
       rows.push({label:'Login cloud',ok:!!session,detail:session ? 'Sesi akun cloud tersedia' : 'Login cloud dahulu di atas.'});
       if (session) {
         const schema=await sb.rpc('pos_schema_version');
-        rows.push({label:'Migrasi database',ok:!schema.error && schema.data===4,detail:schema.error ? 'Migrasi 0004 belum terverifikasi: '+schema.error.message : `Versi schema: ${schema.data}`});
+        rows.push({label:'Migrasi database',ok:!schema.error && schema.data===SCHEMA_VERSION,detail:schema.error ? 'Migrasi 0005 belum terverifikasi: '+schema.error.message : `Versi schema: ${schema.data} (dibutuhkan ${SCHEMA_VERSION})`});
         const member=await sb.from('cloud_memberships').select('role').eq('device_id',await deviceId());
         rows.push({label:'Akses tablet ini',ok:!member.error && !!member.data?.length,detail:member.error?.message ?? (member.data?.map(m=>m.role).join(', ') || 'Belum ada membership untuk tablet ini.')});
       }
@@ -41,6 +43,7 @@ export default function Diagnostics() {
     <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={inspect} className="primary-button">{busy ? 'Memeriksa…' : 'Periksa kesiapan'}</button>
       <button className="secondary-button" onClick={()=>downloadSql(migration2,'0002_secure_sync.sql')}>Unduh SQL keamanan</button><button className="secondary-button" onClick={()=>downloadSql(migration3,'0003_inventory_reporting.sql')}>Unduh SQL stok & laporan</button>
       <button className="secondary-button" onClick={()=>downloadSql(migration4,'0004_operations.sql')}>Unduh SQL operasional</button>
+      <button className="secondary-button" onClick={()=>downloadSql(migration5,'0005_drawer_expenses.sql')}>Unduh SQL pengeluaran laci</button>
       <button disabled={busy || !printerAvailable()} className="secondary-button" onClick={async()=>{setBusy(true);try{const name=await connectPrinter();await printBytes(buildPrinterTest());setMessage(`Cetak uji dikirim ke ${name}. Periksa kertas dan keterbacaan secara langsung.`);}catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}}>Hubungkan & cetak uji</button>
     </div><p className="text-xs text-gray-500 mt-3">SQL dijalankan oleh admin di Supabase SQL Editor secara berurutan dan hanya sekali. Tombol unduh tidak menerapkan migrasi.</p>
     {message && <p role="status" className="notice mt-4">{message}</p>}

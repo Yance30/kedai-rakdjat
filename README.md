@@ -1,6 +1,6 @@
 # Kedai Rakdjat POS
 
-Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 4](docs/operasional.md).
+Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 5](docs/operasional.md).
 
 **Local-first point of sale for a real Indonesian kedai** — built for an Android tablet cashier, with cloud monitoring for the owner and a kitchen display system. Works fully offline; syncs to Supabase when a connection is available.
 
@@ -62,7 +62,7 @@ npm install
 ### 2. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), then [`0004_operations.sql`](supabase/migrations/0004_operations.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 4 before acknowledging sync.
+2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), [`0004_operations.sql`](supabase/migrations/0004_operations.sql), then [`0005_drawer_expenses.sql`](supabase/migrations/0005_drawer_expenses.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 5 before acknowledging sync.
 3. Create a `.env` file in the project root:
 
 ```env

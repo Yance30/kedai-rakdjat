@@ -27,6 +27,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync('supabase/migrations/0002_secure_sync.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0003_inventory_reporting.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0004_operations.sql', 'utf8'));
+  await pg.exec(readFileSync('supabase/migrations/0005_drawer_expenses.sql', 'utf8'));
   await pg.exec(`insert into public.cloud_memberships values ('${owner}','tablet-a','owner'),('${cashier}','tablet-a','cashier'),('${kitchen}','tablet-a','kitchen'),('${outsider}','tablet-b','owner')`);
 });
 afterAll(async () => { await pg.close(); });
@@ -98,7 +99,7 @@ describe('migrasi SQL dan akses cloud', () => {
   });
   it('schema stok aktif, owner dapat membuat bahan, kasir memotong stok secara atomik dan idempoten', async () => {
     await login(owner);
-    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(4);
+    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(5);
     const ingredient=row('ingredients',{name:'Kopi',unit:'g',stock:1000,minimum:100,unit_cost:100,active:1});
     await push([ingredient,row('recipes',{ingredients:[{ingredientId:1,qty:20}]}),row('stock_movements',{ingredient_local_id:1,order_local_id:null,kind:'opening',qty:1000,unit_cost:100,reason:'Stok awal',actor_local_id:1,created_at:1000})]);
     await login(cashier);
@@ -113,4 +114,11 @@ describe('migrasi SQL dan akses cloud', () => {
     await expect(pg.query("select public.apply_pos_changes_v2('tablet-a','[]',false)")).rejects.toThrow('permission denied');
     await login(kitchen);expect((await pg.query('select * from public.ingredients')).rows).toHaveLength(0);
   });
+});
+it('pengeluaran dari laci kas menyimpan dan memperbarui shift_local_id', async () => {
+  await login(owner);
+  const expense = row('expenses', { local_id: 7, date: '2026-11-11', category: 'Lainnya', description: 'Beli es batu', amount: 5000, actor_local_id: 1, created_at: 1000 });
+  await push([expense]);
+  await push([{ ...expense, row: { ...expense.row, shift_local_id: 3 } }]);
+  expect((await pg.query<{ shift_local_id: number }>('select shift_local_id from public.expenses where local_id=7')).rows[0].shift_local_id).toBe(3);
 });
