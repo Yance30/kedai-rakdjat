@@ -59,6 +59,8 @@ export interface Order {
   discount?: number;
   discountReason?: string;
   discountApproverId?: number;
+  /** Set on a paid part of a split bill: the open table order it was taken from. */
+  splitFrom?: number;
 }
 
 export interface OrderItem {

@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { changePin, pinLockLog } from '../auth';
-import { createBackup, downloadBackup, legacyPinStaff, parseBackup, restoreBackup } from '../backup';
+import { createBackup, downloadBackup, downloadSnapshot, legacyPinStaff, listSnapshots, parseBackup, restoreBackup, takeAutoSnapshot } from '../backup';
 import CloudAccess from '../components/CloudAccess';
+import CloudRestore from '../components/CloudRestore';
 import Diagnostics from '../components/Diagnostics';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
@@ -28,6 +29,29 @@ function PinLockHistory() {
         </ul>
       )}
     </section>
+  );
+}
+
+function LocalSnapshots({ onError }: { onError: (msg: string) => void }) {
+  const list = useLiveQuery(() => listSnapshots(), []) ?? [];
+  const [busy, setBusy] = useState(false);
+  const waktu = (t: number) => new Date(t).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'medium', timeStyle: 'short' });
+  return (
+    <div className="mt-5 border-t pt-4">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <h3 className="font-medium text-sm">Salinan otomatis di tablet</h3>
+        <button disabled={busy} className="text-xs underline" onClick={async () => { setBusy(true); try { await takeAutoSnapshot('Manual'); } catch (e) { onError((e as Error).message); } finally { setBusy(false); } }}>Buat salinan sekarang</button>
+      </div>
+      <p className="text-xs text-gray-500 mb-3">Dibuat otomatis sekali sehari dan setiap tutup shift (7 terakhir disimpan), plus salinan sebelum setiap restore. Salinan ini ada di tablet yang sama, jadi tetap unduh backup atau gunakan sync cloud untuk perlindungan bila tablet rusak.</p>
+      {list.length === 0 ? <p className="text-sm text-gray-500">Belum ada salinan.</p> : (
+        <ul className="text-sm divide-y">
+          {list.map(s => <li key={s.id} className="py-2 flex justify-between items-center gap-3">
+            <span>{waktu(s.createdAt)} · {s.reason} <span className="text-gray-400">({Math.max(1, Math.round(s.size / 1024))} KB)</span></span>
+            <button className="text-xs underline" onClick={() => downloadSnapshot(s.id).catch(e => onError((e as Error).message))}>Unduh</button>
+          </li>)}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -242,7 +266,6 @@ export default function Settings({ staff }: { staff: Staff }) {
           <PinLockHistory />
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Backup Data</h2>
-            <button className="text-sm underline mb-3" onClick={async () => { const saved = await db.recovery.orderBy('id').last(); if (saved) downloadBackup(JSON.parse(saved.data), 'sebelum-restore'); else setMsg('Belum ada salinan sebelum restore.'); }}>Unduh salinan sebelum restore terakhir</button>
             <p className="text-xs text-gray-500 mb-4">Export cadangan seluruh data, atau import untuk memulihkan.</p>
             <div className="flex gap-2 items-center">
               <button onClick={exportBackup} className="h-11 px-6 rounded-lg bg-primary text-white font-semibold">
@@ -261,6 +284,7 @@ export default function Settings({ staff }: { staff: Staff }) {
                 />
               </label>
             </div>
+            <LocalSnapshots onError={setMsg} />
           </section>
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Koneksi Cloud (Supabase)</h2>
@@ -283,7 +307,7 @@ export default function Settings({ staff }: { staff: Staff }) {
                 className="w-full h-11 rounded-lg border border-gray-300 px-3"
               />
             </div>
-            <CloudAccess />
+            <CloudAccess>{(device, role) => <CloudRestore key={device} device={device} role={role} />}</CloudAccess>
             <div className="flex items-center gap-3 mt-3">
               <button onClick={syncNow} disabled={syncing} className="h-11 px-6 rounded-lg bg-primary text-white font-semibold disabled:opacity-40">
                 {syncing ? 'Sync…' : 'Sync Sekarang'}

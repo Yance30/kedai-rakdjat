@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { authenticatePin } from '../auth';
 import { closeShift } from '../transactions';
+import { takeAutoSnapshot } from '../backup';
 import { drawerExpenses } from '../operations';
 import { pushAll } from '../sync';
 import { rupiah } from '../money';
@@ -57,6 +58,8 @@ export default function Report({ shift, actorId, onClosed }: { shift: Shift; act
       if (Object.values(counts).some(v => v !== '' && (!Number.isSafeInteger(Number(v)) || Number(v) < 0))) throw new Error('Jumlah lembar/koin harus bilangan bulat positif atau nol.');
       const owner = diff !== 0 ? await authenticatePin(pin, true) : undefined;
       await closeShift(shift.id!, actorId, physical, owner?.id);
+      // A local copy at every shift close; failure here must not undo the closed shift.
+      await takeAutoSnapshot('Tutup shift').catch(() => undefined);
       void pushAll();
       onClosed();
     } catch (e) { setError((e as Error).message); }

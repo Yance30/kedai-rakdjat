@@ -7,6 +7,8 @@ interface KdsOrder {
   created_at: number;
   table_local_id: number | null;
   kds_status: string;
+  /** Paid part of a split bill: its items belong to the parent's kitchen ticket. */
+  split_from_local_id?: number | null;
 }
 interface KdsItem {
   order_local_id: number;
@@ -88,6 +90,13 @@ export default function Kds({ device }: { device: string }) {
     );
   }
 
+  // A split bill moves items into separate paid orders; the kitchen still cooks them as one ticket.
+  const parentOf = new Map(orders.filter(o => o.split_from_local_id).map(o => [o.local_id, o.split_from_local_id!]));
+  const ticketItems = (id: number) => {
+    const merged = new Map<string, number>();
+    for (const i of items) if ((parentOf.get(i.order_local_id) ?? i.order_local_id) === id) merged.set(i.name, (merged.get(i.name) ?? 0) + i.qty);
+    return [...merged].map(([name, qty]) => ({ name, qty }));
+  };
   const tableName = (id: number | null) => tables.find((t) => t.local_id === id)?.name ?? 'Takeaway';
 
   return (
@@ -102,7 +111,7 @@ export default function Kds({ device }: { device: string }) {
       {msg && <p className="text-sm text-primary-bright mb-4">{msg}</p>}
       <div className="grid lg:grid-cols-3 gap-4">
         {COLS.map((col) => {
-          const list = orders.filter((o) => (o.kds_status || 'incoming') === col.key);
+          const list = orders.filter((o) => !o.split_from_local_id && (o.kds_status || 'incoming') === col.key);
           return (
             <div key={col.key} className={`rounded-xl border-2 p-4 ${col.cls}`}>
               <div className="font-semibold mb-3 flex justify-between">{col.label}<span className="text-sm text-gray-500">{list.length}</span></div>
@@ -115,7 +124,7 @@ export default function Kds({ device }: { device: string }) {
                       <span className="text-xs text-gray-500">{elapsed(o.created_at, now)}</span>
                     </div>
                     <ul className="text-sm space-y-0.5 mb-3">
-                      {items.filter((i) => i.order_local_id === o.local_id).map((i, idx) => (
+                      {ticketItems(o.local_id).map((i, idx) => (
                         <li key={idx}>{i.qty}× {i.name}</li>
                       ))}
                     </ul>

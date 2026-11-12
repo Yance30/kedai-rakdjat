@@ -24,7 +24,8 @@ export class PosDB extends Dexie {
   meja!: Table<DiningTable, number>;
   audit!: Table<AuditEvent, number>;
   syncState!: Table<{ key: string; value: string }, string>;
-  recovery!: Table<{ id?: number; createdAt: number; data: string }, number>;
+  /** Local copies of the whole database: before a restore, or automatic daily / shift-close snapshots. */
+  recovery!: Table<{ id?: number; createdAt: number; data: string; kind?: 'restore' | 'auto'; reason?: string }, number>;
   drafts!: Table<CartDraft, string>;
   ingredients!: Table<Ingredient, number>;
   recipes!: Table<Recipe, number>;

@@ -9,8 +9,8 @@ export interface SyncResult {
 }
 
 /** Cloud schema version this app requires (see supabase/migrations). */
-export const SCHEMA_VERSION = 5;
-const MIGRATIONS = '0002 sampai 0005';
+export const SCHEMA_VERSION = 6;
+const MIGRATIONS = '0002 sampai 0006';
 
 let flight: Promise<SyncResult> | undefined;
 export async function exclusive<T>(run: () => Promise<T>): Promise<T> {

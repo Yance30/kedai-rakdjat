@@ -1,6 +1,6 @@
 # Kedai Rakdjat POS
 
-Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 5](docs/operasional.md).
+Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 6](docs/operasional.md).
 
 **Local-first point of sale for a real Indonesian kedai** — built for an Android tablet cashier, with cloud monitoring for the owner and a kitchen display system. Works fully offline; syncs to Supabase when a connection is available.
 
@@ -18,7 +18,8 @@ Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migra
 - **Owner dashboard (cloud)** — today's revenue, payment mix, 7-day revenue trend, best-selling menu ranking, average ticket, and day-over-day growth — all rendered with dependency-free SVG charts.
 - **Kitchen Display System (KDS)** — incoming → cooking → ready columns, live from the cloud.
 - **PWA** — installable on the tablet home screen, standalone mode, precached app shell.
-- **Backup & restore** — one-click JSON export/import of the entire local database.
+- **Split bill** — guests at one table pay for their own items; each part becomes its own paid order while the rest of the table stays open and the kitchen keeps one ticket.
+- **Backup & recovery** — one-click JSON export/import, automatic daily and shift-close snapshots on the tablet, persistent-storage request, and **restore from cloud** onto a replacement tablet.
 
 ## Tech stack
 
@@ -62,7 +63,7 @@ npm install
 ### 2. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), [`0004_operations.sql`](supabase/migrations/0004_operations.sql), then [`0005_drawer_expenses.sql`](supabase/migrations/0005_drawer_expenses.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 5 before acknowledging sync.
+2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), [`0004_operations.sql`](supabase/migrations/0004_operations.sql), [`0005_drawer_expenses.sql`](supabase/migrations/0005_drawer_expenses.sql), then [`0006_split_bill.sql`](supabase/migrations/0006_split_bill.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 6 before acknowledging sync.
 3. Create a `.env` file in the project root:
 
 ```env
@@ -95,16 +96,22 @@ Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of th
 
 ```
 src/
-├── screens/        Login, Cashier, Meja, Report (Keuangan), History,
-│                   Cloud (owner dashboard), Kds, Settings
-├── components/     SVG charts (bar, area, donut, rank bars)
-├── db.ts           Dexie schema, seeds, PIN hashing
-├── sync.ts         push-only upsert sync to Supabase
-├── supabase.ts     client bootstrap + device identity
-├── printer.ts      ESC/POS builders + Web Bluetooth transport
-└── money.ts        integer-rupiah helpers
+├── screens/          Login, Cashier, Meja, Report (Keuangan), History, Sales, Menu,
+│                     Expenses, Inventory, OwnerDashboard, Cloud, Kds, Settings
+├── components/       SVG charts, cloud login, cloud restore, diagnostics, setup guide
+├── db.ts             Dexie schema and seeds
+├── auth.ts           PBKDF2 PINs and escalating lockout
+├── transactions.ts   sales, split bills, refunds/voids, shift close
+├── inventory.ts      ingredients, recipes, stock movements, cost of goods
+├── operations.ts     menu, expenses, waste and stocktake
+├── backup.ts         backup validation/restore, automatic local snapshots
+├── sync.ts           event-driven push sync to Supabase (sync-payload.ts builds the diff)
+├── cloud-restore.ts  pull a device's data back from the cloud
+├── supabase.ts       client bootstrap + device identity
+├── printer.ts        ESC/POS builders + Web Bluetooth transport
+└── money.ts          integer-rupiah helpers
 supabase/
-└── migrations/     cloud schema (0001_init.sql)
+└── migrations/       cloud schema 0001–0006, applied in order
 ```
 
 ## Roadmap
@@ -116,6 +123,7 @@ supabase/
 - [x] Persistent cart recovery and audited receipt copies
 - [x] Ingredients, recipes, stock movements and transaction cost snapshots
 - [x] Responsive tablet layout and browser/device diagnostics
+- [x] Split bill per item, restore from cloud, automatic local snapshots (production migration 0006 required)
 
 ---
 

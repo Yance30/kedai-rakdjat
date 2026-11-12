@@ -192,3 +192,36 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   await page.screenshot({path:'test-results/kasir-portrait.png',animations:'disabled'});
   expect(errors).toEqual([]);
 });
+test('pisah bill: tamu membayar sebagian item, sisa tetap di meja lalu dilunasi', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/');
+  await login(page, '1234');
+  await page.getByLabel('PIN baru', { exact: true }).fill('987654');
+  await page.getByLabel('Ulangi PIN', { exact: true }).fill('987654');
+  await page.getByRole('button', { name: 'Simpan PIN & masuk' }).click();
+  await page.getByRole('button', { name: 'Meja', exact: true }).click();
+  await page.getByRole('button', { name: 'Buka Meja' }).first().click();
+  const add = page.getByRole('button', { name: '+ Tambah', exact: true });
+  await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Nasi Lemak, 1× Es Teh
+  await expect(page.getByText('Simpan & kirim ke dapur dulu untuk memisah bill.')).toBeHidden(); // no saved order yet
+  await page.getByRole('button', { name: 'Simpan & ke Dapur' }).click();
+  await page.getByRole('button', { name: 'Lanjut / Bayar' }).click();
+  await page.getByRole('button', { name: 'Pisah Bill' }).click();
+  await page.getByLabel('Dibayar terpisah: Nasi Lemak Spesial').getByRole('button', { name: '+' }).click();
+  await page.getByRole('button', { name: 'Bayar Item Terpilih' }).click();
+  await expect(page.getByText('Rp 38.500').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Uang Pas' }).click();
+  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
+  await expect(page.getByText('Bill terpisah lunas.')).toBeVisible();
+  await page.getByRole('button', { name: 'Lanjutkan Sisa Pesanan' }).click();
+  expect(await counts(page)).toEqual({ orders: 2, payments: 1, audit: 1 });
+  await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
+  await expect(page.getByText('Rp 51.700').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Uang Pas' }).click();
+  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
+  await page.getByRole('button', { name: 'Kembali ke Denah Meja' }).click();
+  await expect(page.getByRole('button', { name: 'Selesai Bersih' })).toBeVisible();
+  expect(await counts(page)).toEqual({ orders: 2, payments: 2, audit: 2 });
+  expect(errors).toEqual([]);
+});

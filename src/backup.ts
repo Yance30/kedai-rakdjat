@@ -1,4 +1,4 @@
-import { rangeBounds } from './reports';
+import { jakartaDay, rangeBounds } from './reports';
 import { db } from './db';
 import { deviceId } from './supabase';
 import { exclusive } from './sync';
@@ -86,6 +86,7 @@ export function parseBackup(text: string): Backup {
   }
   for (const m of d.stockMovements) if (!ids.ingredients.has(m.ingredientId) || !ids.staff.has(m.actorId) || !['opening','purchase','adjustment','sale','return','waste','stocktake'].includes(m.kind) || !Number.isSafeInteger(m.qty) || !Number.isFinite(m.unitCost) || m.unitCost < 0 || !string(m.reason) || !integer(m.createdAt,1) || (m.orderId !== undefined && !ids.orders.has(m.orderId))) fail('pergerakan stok tidak valid.');
   for (const i of d.ingredients) if (d.stockMovements.filter(m => m.ingredientId === i.id).reduce((sum,m) => sum + m.qty,0) !== i.stock) fail('saldo stok tidak cocok dengan riwayat.');
+  for (const o of d.orders) if (o.splitFrom !== undefined && (!ids.orders.has(o.splitFrom) || o.splitFrom === o.id || o.status === 'open')) fail('pisah bill tidak valid.');
   for (const o of d.orders) if ((o.costTotal !== undefined && !integer(o.costTotal)) || (o.costComplete !== undefined && typeof o.costComplete !== 'boolean') || (o.stockReturned !== undefined && typeof o.stockReturned !== 'boolean')) fail('harga pokok pesanan tidak valid.');
   for (const e of d.expenses) if (!/^\d{4}-\d{2}-\d{2}$/.test(e.date) || !Number.isFinite(Date.parse(e.date+'T00:00:00+07:00')) || !string(e.category) || !string(e.description) || !integer(e.amount,1) || !ids.staff.has(e.actorId) || !integer(e.createdAt,1) || (e.voidedAt !== undefined && (!integer(e.voidedAt,1) || !string(e.voidReason))) || (e.shiftId !== undefined && !ids.shifts.has(e.shiftId))) fail('pengeluaran tidak valid.');
   for (const o of d.orders) if (!integer(o.discount ?? 0) || (o.discount ?? 0) >= o.subtotal || ((o.discount ?? 0)>0 && (!string(o.discountReason) || !d.staff.some(s=>s.id===o.discountApproverId && s.role==='owner')))) fail('diskon tidak valid.');
@@ -94,14 +95,18 @@ export function parseBackup(text: string): Backup {
   d.settings = d.settings.filter(s => settingKeys.has(s.key));
   return backup as unknown as Backup;
 }
-export async function restoreBackup(input: Backup) {
+/**
+ * Replaces all business data. `adoptDevice` makes this tablet continue as that cloud device
+ * (restore from cloud onto a replacement tablet); otherwise the tablet keeps its own identity.
+ */
+export async function restoreBackup(input: Backup, options: { adoptDevice?: string } = {}) {
   const backup = parseBackup(JSON.stringify(input));
   return exclusive(async () => {
     const before = await createBackup();
     return db.transaction('rw', [...businessTables(), db.recovery, db.drafts], async () => {
       // Capture under the write transaction too, so another tab cannot slip a sale between backup and replacement.
       const recovery = await createBackup();
-      await db.recovery.add({ createdAt: Date.now(), data: JSON.stringify(recovery) });
+      await db.recovery.add({ createdAt: Date.now(), data: JSON.stringify(recovery), kind: 'restore', reason: 'Sebelum restore' });
       const d = backup.data;
       for (const t of businessTables()) if (t !== db.settings) await t.clear();
       // Legacy 32-bit PIN hashes are trivially reversible from the backup file, so those PINs must be replaced.
@@ -114,12 +119,46 @@ export async function restoreBackup(input: Backup) {
       await db.drafts.clear();
       for (const key of settingKeys) await db.settings.delete(key);
       await db.settings.bulkPut(d.settings);
-      await db.settings.put({ key: 'device_id', value: before.sourceDevice });
+      await db.settings.put({ key: 'device_id', value: options.adoptDevice ?? before.sourceDevice });
       await db.settings.put({ key: 'sync_paused', value: 'true' });
       await db.settings.put({ key: 'data_generation', value: crypto.randomUUID() });
     });
   });
 }
+const AUTO_KEEP = 7;
+/** Stores a full local copy on the tablet and keeps the latest seven automatic copies. */
+export async function takeAutoSnapshot(reason: string, now = Date.now()) {
+  const data = JSON.stringify(await createBackup());
+  await db.transaction('rw', db.recovery, db.settings, async () => {
+    await db.recovery.add({ createdAt: now, data, kind: 'auto', reason });
+    const autos = (await db.recovery.orderBy('createdAt').toArray()).filter(r => r.kind === 'auto');
+    await db.recovery.bulkDelete(autos.slice(0, -AUTO_KEEP).map(r => r.id!));
+    await db.settings.put({ key: 'last_auto_snapshot', value: String(now) });
+  });
+}
+/** Takes at most one automatic snapshot per (Jakarta) day. */
+export async function dailySnapshot(now = Date.now()) {
+  const last = Number((await db.settings.get('last_auto_snapshot'))?.value ?? 0);
+  if (last && jakartaDay(last) === jakartaDay(now)) return false;
+  await takeAutoSnapshot('Harian', now);
+  return true;
+}
+export async function listSnapshots() {
+  return (await db.recovery.orderBy('createdAt').reverse().toArray()).map(r => ({ id: r.id!, createdAt: r.createdAt, kind: r.kind ?? 'restore', reason: r.reason ?? 'Sebelum restore', size: r.data.length }));
+}
+export async function downloadSnapshot(id: number) {
+  const row = await db.recovery.get(id);
+  if (!row) throw new Error('Salinan tidak ditemukan.');
+  downloadBackup(JSON.parse(row.data), row.kind === 'auto' ? 'otomatis' : 'sebelum-restore');
+}
+/** Asks the browser not to evict IndexedDB under storage pressure (the tablet is the source of truth). */
+export async function requestPersistentStorage() {
+  try {
+    if (!navigator.storage?.persist) return false;
+    return (await navigator.storage.persisted()) || await navigator.storage.persist();
+  } catch { return false; }
+}
+
 export function downloadBackup(value: unknown, name = 'backup') {
   const url = URL.createObjectURL(new Blob([JSON.stringify(value)], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = `kedai-rakdjat-${name}-${Date.now()}.json`; a.click();

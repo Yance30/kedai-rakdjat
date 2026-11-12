@@ -28,6 +28,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync('supabase/migrations/0003_inventory_reporting.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0004_operations.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0005_drawer_expenses.sql', 'utf8'));
+  await pg.exec(readFileSync('supabase/migrations/0006_split_bill.sql', 'utf8'));
   await pg.exec(`insert into public.cloud_memberships values ('${owner}','tablet-a','owner'),('${cashier}','tablet-a','cashier'),('${kitchen}','tablet-a','kitchen'),('${outsider}','tablet-b','owner')`);
 });
 afterAll(async () => { await pg.close(); });
@@ -99,7 +100,7 @@ describe('migrasi SQL dan akses cloud', () => {
   });
   it('schema stok aktif, owner dapat membuat bahan, kasir memotong stok secara atomik dan idempoten', async () => {
     await login(owner);
-    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(5);
+    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(6);
     const ingredient=row('ingredients',{name:'Kopi',unit:'g',stock:1000,minimum:100,unit_cost:100,active:1});
     await push([ingredient,row('recipes',{ingredients:[{ingredientId:1,qty:20}]}),row('stock_movements',{ingredient_local_id:1,order_local_id:null,kind:'opening',qty:1000,unit_cost:100,reason:'Stok awal',actor_local_id:1,created_at:1000})]);
     await login(cashier);
@@ -121,4 +122,10 @@ it('pengeluaran dari laci kas menyimpan dan memperbarui shift_local_id', async (
   await push([expense]);
   await push([{ ...expense, row: { ...expense.row, shift_local_id: 3 } }]);
   expect((await pg.query<{ shift_local_id: number }>('select shift_local_id from public.expenses where local_id=7')).rows[0].shift_local_id).toBe(3);
+});
+it('bagian pisah bill tersinkron dengan rujukan ke pesanan meja', async () => {
+  await login(owner);
+  await push([row('orders', { ...order.row, local_id: 50 }), row('orders', { ...order.row, local_id: 51, status: 'paid', split_from_local_id: 50 })]);
+  expect((await pg.query<{ split_from_local_id: number }>('select split_from_local_id from public.orders where local_id=51')).rows[0].split_from_local_id).toBe(50);
+  await expect(push([row('orders', { ...order.row, local_id: 52, split_from_local_id: 52 })])).rejects.toThrow();
 });

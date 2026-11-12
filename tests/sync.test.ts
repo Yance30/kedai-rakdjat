@@ -6,7 +6,7 @@ vi.mock('../src/supabase', () => ({ cloudProject: () => 'project', deviceId: asy
 import { pushAll } from '../src/sync';
 beforeEach(async () => {
   await db.delete(); await db.open();
-  mocks.rpc.mockReset().mockImplementation(async (name: string) => ({ error: null, data: name === 'pos_schema_version' ? 5 : null }));
+  mocks.rpc.mockReset().mockImplementation(async (name: string) => ({ error: null, data: name === 'pos_schema_version' ? 6 : null }));
   mocks.getSession.mockResolvedValue({ data: { session: { user: {} } } });
   // Node's Web Locks implementation serializes simultaneous sync requests.
 });
@@ -33,7 +33,7 @@ it('tanpa login atau setelah restore tidak melakukan RPC', async () => {
 });
 it('perubahan saat RPC berlangsung tetap dikirim pada putaran berikutnya', async () => {
   mocks.rpc.mockImplementation(async (name: string) => {
-    if (name === 'pos_schema_version') return { error: null, data: 5 };
+    if (name === 'pos_schema_version') return { error: null, data: 6 };
     await db.products.update(1, { name: 'Berubah saat sync' });
     return { error: null };
   });

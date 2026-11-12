@@ -54,5 +54,11 @@ export function useCart(shiftId: number, staffId: number, tableId?: number | nul
     const next: CartDraft = { ...current.current, lines: [], orderId: null, requestId: crypto.randomUUID(), revision: 0, updatedAt: Date.now() };
     current.current = next; setCart(next); setStatus('Transaksi tersimpan');
   }
-  return { cart, update, flush, completed, status, error, saving };
+  /** Shows lines that were already saved by a transaction (e.g. what is left after a split bill) without writing a draft. */
+  function replaceSaved(lines: { product: Product; qty: number }[]) {
+    if (!current.current) return;
+    const next: CartDraft = { ...current.current, lines, requestId: crypto.randomUUID(), revision: 0, updatedAt: Date.now() };
+    current.current = next; setCart(next); setStatus('Sisa pesanan meja');
+  }
+  return { cart, update, flush, completed, replaceSaved, status, error, saving };
 }

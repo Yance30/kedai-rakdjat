@@ -2,6 +2,7 @@ import { lazy, useEffect, useRef, useState } from 'react';
 import { db } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { startSync } from './sync';
+import { dailySnapshot, requestPersistentStorage } from './backup';
 import CloudAccess from './components/CloudAccess';
 const CloudPortal = lazy(() => import('./screens/CloudPortal'));
 const Menu = lazy(() => import('./screens/Menu'));
@@ -63,6 +64,14 @@ export default function App() {
   const syncError = syncSettings.find(s => s.key === 'sync_error')?.value;
   const lastSync = syncSettings.find(s => s.key === 'last_sync')?.value;
   useEffect(() => startSync(), []);
+  useEffect(() => {
+    void requestPersistentStorage();
+    // Checked hourly so a tablet left running overnight still gets the next day's copy.
+    const daily = () => { void dailySnapshot().catch(() => undefined); };
+    daily();
+    const id = setInterval(daily, 60 * 60_000);
+    return () => clearInterval(id);
+  }, []);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
   const [tab, setTab] = useState<'kasir' | 'meja' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');

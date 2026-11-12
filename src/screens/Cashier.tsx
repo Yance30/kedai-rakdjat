@@ -4,7 +4,7 @@ import { db } from '../db';
 import { rupiah } from '../money';
 import { buildBill, buildReceipt, buildTicket, connectPrinter, printBytes, printerAvailable, printerConnected } from '../printer';
 import { pushAll } from '../sync';
-import { commitSale, validateSale } from '../transactions';
+import { commitSale, commitSplit, priceOrder, validateSale } from '../transactions';
 import { useCart } from '../useCart';
 import type { DiningTable, Order, OrderItem, Payment, Product, Shift, Staff } from '../types';
 
@@ -18,6 +18,7 @@ interface Success {
   total: number;
   method: 'cash' | 'qris';
   change: number;
+  split?: boolean;
 }
 
 export default function Cashier({
@@ -67,26 +68,66 @@ export default function Cashier({
   const [discountInput,setDiscountInput]=useState('');
   const [discountReason,setDiscountReason]=useState('');
   const [discountPin,setDiscountPin]=useState('');
-  const cartSignature=JSON.stringify(lines);
-  useEffect(()=>{setDiscountInput('');setDiscountReason('');setDiscountPin('');},[cartSignature]);
-  const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
+  // Split bill: pay selected items of a saved table order separately.
+  const [splitting, setSplitting] = useState(false);
+  const [pick, setPick] = useState<Record<number, number>>({});
+  const splitRequest = useRef<string | null>(null);
+  const savedItems = useLiveQuery(() => loadedOrderId ? db.orderItems.where('orderId').equals(loadedOrderId).toArray() : [], [loadedOrderId]);
+  const savedMatches = !!savedItems && savedItems.length === lines.length && lines.every(l => savedItems.some(i => i.productId === l.product.id && i.qty === l.qty && i.price === l.product.price));
+  const canSplit = !!tableId && !!loadedOrderId && savedMatches && lines.reduce((s, l) => s + l.qty, 0) > 1;
+  useEffect(() => { if (!canSplit) setSplitting(false); }, [canSplit]);
+  useEffect(() => { setPick({}); }, [splitting]);
+  const pickedLines = lines.map(l => ({ ...l, qty: Math.min(pick[l.product.id!] ?? 0, l.qty) })).filter(l => l.qty > 0);
+  const pickedAll = pickedLines.length > 0 && lines.every(l => (pick[l.product.id!] ?? 0) >= l.qty);
+  const billLines = splitting ? pickedLines : lines;
+
+  const cartSignature=JSON.stringify([lines, splitting && pick]);
+  useEffect(()=>{setDiscountInput('');setDiscountReason('');setDiscountPin('');splitRequest.current=null;},[cartSignature]);
+  const subtotal = billLines.reduce((s, l) => s + l.product.price * l.qty, 0);
   const discount=discountMode==='persen'?Math.round(subtotal*Number(discountInput)/100):Number(discountInput);
   const discountValid=Number.isSafeInteger(discount)&&discount>=0&&(subtotal===0?discount===0:discount<subtotal)&&Number(discountInput)>=0;
-  const service = Math.round((subtotal-discount) * serviceRate / 100);
-  const tax = Math.round((subtotal - discount + service) * 0.1);
-  const total = subtotal - discount + service + tax;
+  const { service, tax, total } = priceOrder(subtotal, discount, serviceRate);
 
   function add(p: Product) {
-    if (busy || !draft.cart || draft.error || products.find(item=>item.id===p.id)?.soldOut) return;
+    if (busy || splitting || !draft.cart || draft.error || products.find(item=>item.id===p.id)?.soldOut) return;
     const found = lines.find(l => l.product.id === p.id);
     draft.update(found ? lines.map(l => l.product.id === p.id ? { ...l, qty: l.qty + 1 } : l) : [...lines, { product: p, qty: 1 }]);
   }
   function dec(id: number) {
-    if (busy) return;
+    if (busy || splitting) return;
     draft.update(lines.map(l => l.product.id === id ? { ...l, qty: l.qty - 1 } : l).filter(l => l.qty > 0));
+  }
+  function setPicked(id: number, qty: number, max: number) {
+    setPick(p => ({ ...p, [id]: Math.max(0, Math.min(max, qty)) }));
+  }
+
+  async function confirmSplit(method: 'cash' | 'qris', tendered: number) {
+    if (working.current || !loadedOrderId || !pickedLines.length || pickedAll) return;
+    working.current = true; setBusy(true); setSaleError(''); setPrinterMsg('');
+    try {
+      splitRequest.current ??= crypto.randomUUID();
+      const pay: Payment = { requestId: splitRequest.current, orderId: 0, shiftId: shift.id!, method, amount: total, tendered, change: tendered - total, createdAt: Date.now() };
+      const id = await commitSplit(loadedOrderId, pickedLines.map(l => ({ productId: l.product.id!, qty: l.qty })), pay, staff.id!, serviceRate,
+        discount > 0 ? { amount: discount, reason: discountReason, pin: discountPin } : undefined);
+      splitRequest.current = null;
+      draft.replaceSaved(lines.map(l => ({ ...l, qty: l.qty - Math.min(pick[l.product.id!] ?? 0, l.qty) })).filter(l => l.qty > 0));
+      setSplitting(false); setPaying(false); setDiscountPin(''); setDiscountInput('');
+      if (printerConnected()) {
+        try {
+          const order = (await db.orders.get(id))!;
+          await printBytes(buildReceipt(order, await db.orderItems.where('orderId').equals(id).toArray(), { ...pay, orderId: id }, staff.name));
+        } catch {
+          setPrinterMsg('Pembayaran tersimpan, tetapi struk gagal dicetak. Jangan ulangi pembayaran.');
+        }
+      }
+      setSuccess({ id, total, method, change: tendered - total, split: true });
+      void pushAll();
+    } catch (e) { setSaleError((e as Error).message); }
+    finally { working.current = false; setBusy(false); }
   }
 
   async function confirmPay(method: 'cash' | 'qris', tendered: number) {
+    if (splitting) return confirmSplit(method, tendered);
     if (working.current || !lines.length) return;
     working.current = true; setBusy(true); setSaleError(''); setPrinterMsg('');
     try {
@@ -157,7 +198,7 @@ export default function Cashier({
     };
     validateSale(order, lines.map(l => ({ productId: l.product.id!, name: l.product.name, qty: l.qty, price: l.product.price })));
     const id = await db.transaction('rw', db.orders, db.orderItems, db.meja, db.shifts, db.drafts, async () => {
-      if ((await db.drafts.get(savedDraft.key))?.revision !== savedDraft.revision) throw new Error('Keranjang berubah di tab lain. Muat ulang.');
+      if (((await db.drafts.get(savedDraft.key))?.revision ?? 0) !== savedDraft.revision) throw new Error('Keranjang berubah di tab lain. Muat ulang.');
       if ((await db.shifts.get(shift.id!))?.status !== 'open') throw new Error('Shift sudah ditutup.');
       if (loadedOrderId && (await db.orders.get(loadedOrderId))?.status !== 'open') throw new Error('Pesanan sudah berubah. Muat ulang meja.');
       if (!loadedOrderId && await db.orders.where('tableId').equals(tableId).and(o => o.status === 'open').count()) throw new Error('Meja sudah memiliki pesanan. Muat ulang meja.');
@@ -205,7 +246,7 @@ export default function Cashier({
   }
 
   async function printBill() {
-    if (lines.length === 0) return;
+    if (billLines.length === 0) return;
     const order: Order = {
       shiftId: shift.id!,
       status: 'open',
@@ -217,7 +258,7 @@ export default function Cashier({
       orderType,
       ...(tableId ? { tableId } : {}),
     };
-    const items: OrderItem[] = lines.map((l) => ({
+    const items: OrderItem[] = billLines.map((l) => ({
       orderId: loadedOrderId ?? 0,
       productId: l.product.id!,
       name: l.product.name,
@@ -310,22 +351,41 @@ export default function Cashier({
             ))}
           </div>
         )}
+        {tableId && loadedOrderId && lines.length > 0 && (
+          canSplit ? (
+            <button disabled={busy} onClick={() => setSplitting(s => !s)} className={`mb-3 h-9 rounded-lg text-sm font-medium border ${splitting ? 'bg-primary text-white border-primary' : 'bg-white text-primary border-primary/30'}`}>
+              {splitting ? 'Batal Pisah Bill' : 'Pisah Bill'}
+            </button>
+          ) : !savedMatches && <p className="text-xs text-gray-500 mb-3">Simpan & kirim ke dapur dulu untuk memisah bill.</p>
+        )}
+        {splitting && <p className="text-xs text-gray-600 mb-2">Pilih item yang dibayar tamu ini. Sisanya tetap di meja.</p>}
         <div className="flex-1 overflow-y-auto space-y-3">
-          {lines.length > 0 && <button disabled={busy || draft.saving} onClick={() => { if (confirm('Kosongkan keranjang ini? Pesanan yang sudah dikirim ke dapur tetap tersimpan.')) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
+          {lines.length > 0 && !splitting && <button disabled={busy || draft.saving} onClick={() => { if (confirm('Kosongkan keranjang ini? Pesanan yang sudah dikirim ke dapur tetap tersimpan.')) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
           {lines.length === 0 && <p className="text-sm text-gray-400">Belum ada item.</p>}
-          {lines.map((l) => (
+          {lines.map((l) => {
+            const picked = pick[l.product.id!] ?? 0;
+            return (
             <div key={l.product.id} className="flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{l.product.name}</div>
-                <div className="text-xs text-gray-500">{rupiah(l.product.price)}</div>
+                <div className="text-xs text-gray-500">{rupiah(l.product.price)}{splitting && ` · ${l.qty} di meja`}</div>
               </div>
+              {splitting ? (
+                <div className="flex items-center gap-2" aria-label={`Dibayar terpisah: ${l.product.name}`}>
+                  <button onClick={() => setPicked(l.product.id!, picked - 1, l.qty)} className="w-7 h-7 rounded-md bg-gray-100 hover:bg-gray-200">−</button>
+                  <span className={`w-9 text-center text-sm ${picked ? 'font-semibold text-primary' : 'text-gray-400'}`}>{picked}/{l.qty}</span>
+                  <button onClick={() => setPicked(l.product.id!, picked + 1, l.qty)} className="w-7 h-7 rounded-md bg-primary text-white">+</button>
+                </div>
+              ) : (
               <div className="flex items-center gap-2">
                 <button onClick={() => dec(l.product.id!)} className="w-7 h-7 rounded-md bg-gray-100 hover:bg-gray-200">−</button>
                 <span className="w-5 text-center text-sm">{l.qty}</span>
                 <button onClick={() => add(l.product)} className="w-7 h-7 rounded-md bg-primary text-white">+</button>
               </div>
+              )}
             </div>
-          ))}
+            );
+          })}
         </div>
         <details className="mt-3 text-sm"><summary className="cursor-pointer py-2">Diskon dengan PIN owner</summary><div className="space-y-2">
           <label>Jenis diskon<select aria-label="Jenis diskon" className="w-full border rounded p-2" value={discountMode} onChange={e=>{setDiscountMode(e.target.value);setDiscountInput('');}}><option value="rupiah">Rupiah</option><option value="persen">Persen</option></select></label>
@@ -333,6 +393,7 @@ export default function Cashier({
           {discount>0&&<><label>Alasan diskon<input aria-label="Alasan diskon" className="w-full border rounded p-2" value={discountReason} onChange={e=>setDiscountReason(e.target.value)}/></label><label>PIN owner diskon<input aria-label="PIN owner diskon" className="w-full border rounded p-2" type="password" inputMode="numeric" autoComplete="off" value={discountPin} onChange={e=>setDiscountPin(e.target.value)}/></label><p className="text-xs text-gray-500">Diskon diterapkan sebelum service dan pajak; persetujuan dicatat saat pembayaran. PIN tidak disimpan.</p></>}
           {!discountValid&&<p role="alert">Diskon harus lebih kecil dari subtotal.</p>}</div></details>
         <div className="border-t border-gray-200 pt-3 mt-3 space-y-1 text-sm">
+          {splitting && <div className="text-xs font-semibold text-primary uppercase tracking-wide">Bagian yang dibayar</div>}
           <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{rupiah(subtotal)}</span></div>
           {discount>0&&<div className="flex justify-between"><span>Diskon</span><span>−{rupiah(discount)}</span></div>}
           {serviceRate > 0 && (
@@ -345,14 +406,14 @@ export default function Cashier({
           <div className="flex gap-2 mt-3">
             <button
               onClick={saveOrder}
-              disabled={busy || draft.saving || !!draft.error || lines.length === 0 || discount !== 0}
+              disabled={busy || splitting || draft.saving || !!draft.error || lines.length === 0 || discount !== 0}
               className="flex-1 h-11 rounded-lg bg-gray-800 text-white font-semibold disabled:opacity-40"
             >
               Simpan & ke Dapur
             </button>
             <button
               onClick={printBill}
-              disabled={lines.length === 0 || !printerConnected()}
+              disabled={billLines.length === 0 || !printerConnected()}
               title={!printerConnected() ? 'Hubungkan printer dulu' : 'Cetak bill sementara'}
               className="flex-1 h-11 rounded-lg bg-white border border-gray-300 text-gray-700 font-semibold disabled:opacity-40"
             >
@@ -360,12 +421,13 @@ export default function Cashier({
             </button>
           </div>
         )}
+        {splitting && pickedAll && <p className="text-xs text-gray-500 mt-2">Semua item terpilih. Batalkan pisah bill dan bayar seluruh sisa pesanan.</p>}
         <button
           onClick={() => setPaying(true)}
-          disabled={busy || draft.saving || !!draft.error || lines.length === 0}
+          disabled={busy || draft.saving || !!draft.error || lines.length === 0 || !discountValid || (splitting && (!pickedLines.length || pickedAll))}
           className="mt-3 h-12 rounded-xl bg-gradient-to-r from-primary to-primary-bright text-white font-semibold shadow-md disabled:opacity-40"
         >
-          Lanjut ke Pembayaran
+          {splitting ? 'Bayar Item Terpilih' : 'Lanjut ke Pembayaran'}
         </button>
       </div>
 
@@ -383,8 +445,9 @@ export default function Cashier({
             {success.method === 'cash' && (
               <div className="text-sm text-gray-600 mb-4">Kembalian: <span className="font-semibold">{rupiah(success.change)}</span></div>
             )}
-            <button onClick={() => { setSuccess(null); if (tableId) onTableDone?.(); }} className="w-full h-12 rounded-lg bg-primary text-white font-semibold mt-2">
-              {tableId ? 'Kembali ke Denah Meja' : 'Transaksi Baru'}
+            {success.split && <p className="text-sm text-gray-500 mb-2">Bill terpisah lunas. Sisa pesanan tetap terbuka di meja ini.</p>}
+            <button onClick={() => { const split = success.split; setSuccess(null); if (tableId && !split) onTableDone?.(); }} className="w-full h-12 rounded-lg bg-primary text-white font-semibold mt-2">
+              {success.split ? 'Lanjutkan Sisa Pesanan' : tableId ? 'Kembali ke Denah Meja' : 'Transaksi Baru'}
             </button>
           </div>
         </div>
