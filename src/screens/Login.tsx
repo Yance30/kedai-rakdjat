@@ -67,7 +67,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
 
       <div className="h-full flex">
         <div className="kr-slide-left relative hidden md:block flex-1 min-w-0">
-          <img src="/login-bg.png" alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <img src={`${import.meta.env.BASE_URL}login-bg.png`} alt="" className="absolute inset-0 w-full h-full object-cover" />
           <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
           <div className="absolute inset-0 grid place-items-center p-8">
             <div className="kr-fade-up bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 max-w-sm text-center" style={{ animationDelay: '0.35s' }}>

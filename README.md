@@ -81,6 +81,11 @@ npm run build     # production build (PWA + service worker)
 npm run preview   # serve the production build locally
 ```
 
+### 4. Deploy (GitHub Pages)
+
+Every push to `main` builds and publishes the app to **https://yance30.github.io/kedai-rakdjat/** via [`.github/workflows/pages.yml`](.github/workflows/pages.yml). One-time setup: **Settings → Pages → Source: GitHub Actions**. Optionally add repository variables `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`; otherwise enter them in **Pengaturan → Koneksi Cloud**. HTTPS from Pages satisfies the PWA install and Web Bluetooth printing requirements.
+
+
 Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of these PINs on first login.
 
 ## Security notes
