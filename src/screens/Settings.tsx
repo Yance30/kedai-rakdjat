@@ -6,6 +6,7 @@ import { createBackup, downloadBackup, downloadSnapshot, legacyPinStaff, listSna
 import CloudAccess from '../components/CloudAccess';
 import CloudRestore from '../components/CloudRestore';
 import Diagnostics from '../components/Diagnostics';
+import StaffManager from '../components/StaffManager';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
@@ -152,6 +153,7 @@ export default function Settings({ staff }: { staff: Staff }) {
 
       {isOwner && (
         <>
+          <StaffManager actor={staff} />
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-4">Manajemen Menu</h2>
             <div className="grid md:grid-cols-2 gap-3 mb-4">
@@ -235,7 +237,7 @@ export default function Settings({ staff }: { staff: Staff }) {
 
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Foto QRIS Kedai</h2>
-            <p className="text-xs text-gray-500 mb-4">Foto ini ditampilkan di layar pembayaran QRIS.</p>
+            <p className="text-xs text-gray-500 mb-4">QRIS Kedai Rakdjat (NMID ID1026487869343) sudah terpasang bawaan. Unggah foto lain hanya jika QRIS kedai berganti.</p>
             <input
               type="file"
               accept="image/*"

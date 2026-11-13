@@ -1,6 +1,7 @@
 import Dexie, { type Table } from 'dexie';
 import type { AuditEvent, DiningTable, Order, OrderItem, Payment, Product, Setting, Shift, Staff } from './types';
 import type { CartDraft, Ingredient, Recipe, StockMovement, Expense } from './types';
+import { DEMO_PRODUCT_NAMES, MENU_PRODUCTS } from './menu-seed';
 
 export function hashPin(pin: string): string {
   let h = 5381;
@@ -66,22 +67,24 @@ export class PosDB extends Dexie {
     });
     this.version(6).stores({ expenses: '++id, date, actorId' });
     this.version(7).stores({ expenses: '++id, date, actorId, shiftId' });
+    // Real Kedai Rakdjat menu; demo items are archived (not deleted) so past orders keep their product rows.
+    // Demo staff names become neutral account names the owner renames under Pengaturan → Staf.
+    this.version(8).stores({}).upgrade(async (tx) => {
+      const t = tx as unknown as PosDB;
+      const existing = await t.products.toArray();
+      for (const p of existing) if (DEMO_PRODUCT_NAMES.includes(p.name) && p.active) await t.products.update(p.id!, { active: 0 });
+      const names = new Set(existing.map((p) => p.name));
+      await t.products.bulkAdd(MENU_PRODUCTS.filter((p) => !names.has(p.name)));
+      const rename: Record<string, string> = { 'Budi Santoso': 'Owner', Sari: 'Kasir' };
+      await t.staff.toCollection().modify((s) => { if (rename[s.name]) s.name = rename[s.name]; });
+    });
     this.on('populate', (tx) => {
       const t = tx as unknown as PosDB;
       t.staff.bulkAdd([
-        { name: 'Budi Santoso', role: 'owner', pinHash: hashPin('1234') },
-        { name: 'Sari', role: 'kasir', pinHash: hashPin('1111') },
+        { name: 'Owner', role: 'owner', pinHash: hashPin('1234') },
+        { name: 'Kasir', role: 'kasir', pinHash: hashPin('1111') },
       ]);
-      t.products.bulkAdd([
-        { name: 'Nasi Lemak Spesial', category: 'Food', price: 35000, active: 1 },
-        { name: 'Wagyu Rendang', category: 'Food', price: 65000, active: 1 },
-        { name: 'Sate Ayam Madura', category: 'Food', price: 38000, active: 1 },
-        { name: 'Beef Teriyaki Bowl', category: 'Rice Bowl', price: 45000, active: 1 },
-        { name: 'Signature Coffee', category: 'Coffee', price: 28000, active: 1 },
-        { name: 'Lychee Iced Tea', category: 'Drink', price: 22000, active: 1 },
-        { name: 'Es Teh Manis', category: 'Drink', price: 12000, active: 1 },
-        { name: 'Lava Cake', category: 'Dessert', price: 32000, active: 1 },
-      ]);
+      t.products.bulkAdd(MENU_PRODUCTS);
       t.meja.bulkAdd(seedTables());
     });
   }

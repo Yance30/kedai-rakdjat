@@ -6,6 +6,8 @@ export interface Staff {
   role: Role;
   pinHash: string;
   mustChangePin?: boolean;
+  /** false = access revoked by the owner. Kept (not deleted) because shifts and audit rows reference it. */
+  active?: boolean;
 }
 
 export interface Shift {

@@ -54,7 +54,7 @@ export function parseBackup(text: string): Backup {
   if (!Array.isArray(data.settings)) fail('pengaturan tidak lengkap.');
   for (const row of data.settings as unknown[]) if (!object(row) || !string(row.key) || typeof row.value !== 'string') fail('pengaturan tidak valid.');
   const d = data as unknown as BackupData;
-  for (const s of d.staff) if (!string(s.name) || !['owner', 'kasir'].includes(s.role) || !/^(?:[a-f0-9]{1,8}|pbkdf2\$[a-f0-9]{32}\$[a-f0-9]{64})$/.test(s.pinHash) || (s.mustChangePin !== undefined && typeof s.mustChangePin !== 'boolean')) fail('staf/PIN tidak valid.');
+  for (const s of d.staff) if (!string(s.name) || !['owner', 'kasir'].includes(s.role) || !/^(?:[a-f0-9]{1,8}|pbkdf2\$[a-f0-9]{32}\$[a-f0-9]{64})$/.test(s.pinHash) || (s.mustChangePin !== undefined && typeof s.mustChangePin !== 'boolean') || (s.active !== undefined && typeof s.active !== 'boolean')) fail('staf/PIN tidak valid.');
   if (!d.staff.some(s => s.role === 'owner')) fail('akun owner wajib ada.');
   for (const s of d.shifts) if (!ids.staff.has(s.staffId) || !['open', 'closed'].includes(s.status) || !integer(s.openedAt, 1) || !integer(s.openingFloat) || (s.status === 'closed' && (!integer(s.closedAt, 1) || !integer(s.actualCash)))) fail('shift tidak valid.');
   if (d.shifts.filter(s => s.status === 'open').length > 1) fail('lebih dari satu shift terbuka.');

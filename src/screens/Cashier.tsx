@@ -432,7 +432,7 @@ export default function Cashier({
       </div>
 
       {saleError && <div role="alert" className="fixed bottom-4 left-4 md:left-24 z-[60] bg-red-50 text-primary p-4 rounded shadow">{saleError}</div>}
-      {paying && <PayModal busy={busy} total={total} qrisImage={getSetting('qris_image')} onCancel={() => { if (!working.current) setPaying(false); }} onConfirm={confirmPay} />}
+      {paying && <PayModal busy={busy} total={total} qrisImage={getSetting('qris_image') || `${import.meta.env.BASE_URL}qris.png`} onCancel={() => { if (!working.current) setPaying(false); }} onConfirm={confirmPay} />}
 
       {success && (
         <div className="fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
@@ -519,7 +519,10 @@ function PayModal({
         ) : (
           <div className="rounded-xl border-2 border-dashed border-gray-300 p-6 text-center mb-4">
             {qrisImage ? (
-              <img src={qrisImage} alt="QRIS Kedai Rakdjat" className="h-48 w-48 object-contain mx-auto mb-3" />
+              <>
+                <img src={qrisImage} alt="QRIS Kedai Rakdjat" className="h-64 w-64 object-contain mx-auto mb-1 bg-white" />
+                <div className="text-xs text-gray-500 mb-3">KEDAI RAKDJAT · NMID ID1026487869343</div>
+              </>
             ) : (
               <div className="font-semibold mb-1">QRIS Kedai Rakdjat</div>
             )}

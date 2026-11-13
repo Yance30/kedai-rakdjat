@@ -73,9 +73,11 @@ export async function authenticatePin(pin: string, ownerOnly = false, staffId?: 
     if (Date.now() < state.until) throw new Error(`Terlalu banyak percobaan. Tunggu ${minutes(state.until - Date.now())} menit lagi.`);
     const pool = staffId !== undefined ? [await db.staff.get(staffId)].filter((s): s is Staff => !!s)
       : ownerOnly ? await db.staff.where('role').equals('owner').toArray() : await db.staff.toArray();
-    const staff = ownerOnly ? pool.filter(s => s.role === 'owner') : pool;
-    let match: Staff | undefined;
-    for (const person of staff) if (await verifyPin(pin, person.pinHash)) { match = person; break; }
+    const staff = pool.filter(s => s.active !== false && (!ownerOnly || s.role === 'owner'));
+    // PINs are unique per staff (see changePin), so at most one hash matches. Hashes are derived in
+    // parallel because the login screen asks for a PIN only, without picking a name first.
+    const results = await Promise.all(staff.map(person => verifyPin(pin, person.pinHash)));
+    const match: Staff | undefined = staff[results.indexOf(true)];
     if (!match) {
       const locked = await recordFailure(state, staffId, ownerOnly);
       throw new Error(locked ? `PIN salah. Terlalu banyak percobaan, perangkat dikunci ${minutes(locked.until - locked.at)} menit.` : `PIN salah. Sisa ${MAX_FAILURES - state.failures - 1} percobaan.`);
@@ -92,10 +94,52 @@ export async function authenticatePin(pin: string, ownerOnly = false, staffId?: 
   } finally { checking = false; }
 }
 
-export async function changePin(staffId: number, pin: string) {
+/** Login identifies staff by PIN alone, so a PIN may belong to only one person. */
+async function assertPinFree(pin: string, exceptId?: number) {
   if (pin === '1111' || pin === '1234') throw new Error('Gunakan PIN selain PIN demo.');
-  for (const person of await db.staff.toArray()) {
-    if (person.id !== staffId && await verifyPin(pin, person.pinHash)) throw new Error('PIN sudah digunakan staf lain.');
-  }
+  const others = (await db.staff.toArray()).filter(p => p.id !== exceptId);
+  if ((await Promise.all(others.map(p => verifyPin(pin, p.pinHash)))).includes(true)) throw new Error('PIN sudah digunakan staf lain. Pilih PIN lain.');
+}
+
+export async function changePin(staffId: number, pin: string) {
+  await assertPinFree(pin, staffId);
   await db.staff.update(staffId, { pinHash: await secureHash(pin), mustChangePin: false });
+}
+
+async function requireOwner(actorId: number) {
+  const actor = await db.staff.get(actorId);
+  if (actor?.role !== 'owner' || actor.active === false) throw new Error('Hanya owner yang dapat mengelola staf.');
+}
+const cleanName = (name: string) => {
+  const n = name.trim().replace(/\s+/g, ' ');
+  if (n.length < 2 || n.length > 40) throw new Error('Nama staf 2–40 karakter.');
+  return n;
+};
+
+/** Owner adds a person who may use this tablet. They must change the PIN on first login. */
+export async function addStaff(input: { name: string; role: Staff['role']; pin: string }, actorId: number) {
+  await requireOwner(actorId);
+  if (!['owner', 'kasir'].includes(input.role)) throw new Error('Peran tidak valid.');
+  const name = cleanName(input.name);
+  await assertPinFree(input.pin);
+  return db.staff.add({ name, role: input.role, pinHash: await secureHash(input.pin), mustChangePin: true, active: true });
+}
+
+export async function updateStaff(id: number, changes: { name?: string; role?: Staff['role']; active?: boolean }, actorId: number) {
+  await requireOwner(actorId);
+  const person = await db.staff.get(id);
+  if (!person) throw new Error('Staf tidak ditemukan.');
+  const next = { ...person, ...changes, ...(changes.name !== undefined ? { name: cleanName(changes.name) } : {}) };
+  if (id === actorId && (next.role !== 'owner' || next.active === false)) throw new Error('Owner tidak dapat menonaktifkan atau menurunkan akunnya sendiri.');
+  const owners = (await db.staff.toArray()).filter(s => s.id !== id && s.role === 'owner' && s.active !== false);
+  if ((next.role !== 'owner' || next.active === false) && !owners.length) throw new Error('Minimal harus ada satu owner aktif.');
+  await db.staff.put(next);
+}
+
+/** For a forgotten PIN: owner sets a temporary PIN that the staff member must replace at next login. */
+export async function resetStaffPin(id: number, pin: string, actorId: number) {
+  await requireOwner(actorId);
+  if (!await db.staff.get(id)) throw new Error('Staf tidak ditemukan.');
+  await assertPinFree(pin, id);
+  await db.staff.update(id, { pinHash: await secureHash(pin), mustChangePin: true });
 }

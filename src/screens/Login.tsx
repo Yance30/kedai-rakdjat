@@ -13,10 +13,9 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
   const [error, setError] = useState('');
   const [intro, setIntro] = useState(true);
   const [online, setOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-  // Only names and roles are needed here; PIN hashes stay out of component state.
-  const staff = useLiveQuery(async () => (await db.staff.toArray()).map(s => ({ id: s.id!, name: s.name, role: s.role })), []) ?? [];
-  const [picked, setPicked] = useState<number | null>(null);
-  const selected = staff.length === 1 ? staff[0].id : picked;
+  // Staff are identified by PIN alone, so no names are listed here. Only whether untouched demo
+  // accounts still exist is read, to show the first-time hint; PIN hashes stay out of component state.
+  const demo = useLiveQuery(async () => (await db.staff.toArray()).some(s => !s.pinHash.startsWith('pbkdf2$')), []) ?? false;
 
   useEffect(() => {
     const t = setTimeout(() => setIntro(false), 1950);
@@ -32,10 +31,10 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
   }, []);
 
   async function submit() {
-    if (busy || !selected) return;
+    if (busy || pin.length < 4) return;
     setBusy(true);
     try {
-      const s = await authenticatePin(pin, false, selected);
+      const s = await authenticatePin(pin);
       if (s.mustChangePin) setPending(s); else onLogin(s);
     } catch (e) { setError((e as Error).message); setPin(''); }
     finally { setBusy(false); }
@@ -47,7 +46,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
       await changePin(pending.id!, newPin);
       onLogin({ ...pending, mustChangePin: false });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }}><h1 className="text-xl font-bold">Ganti PIN demo terlebih dahulu</h1><p>{pending.name}, buat PIN baru untuk melindungi akses tablet.</p>
+  }}><h1 className="text-xl font-bold">Buat PIN pribadi terlebih dahulu</h1><p>{pending.name}, PIN ini sementara. Buat PIN baru yang hanya Anda ketahui; PIN ini dipakai untuk login berikutnya.</p>
     <input aria-label="PIN baru" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="PIN baru (4–6 angka)" value={newPin} onChange={e => setNewPin(e.target.value)} />
     <input aria-label="Ulangi PIN" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="Ulangi PIN" value={confirmPin} onChange={e => setConfirmPin(e.target.value)} />
     {error && <p role="alert">{error}</p>}<button disabled={busy} className="bg-primary text-white rounded p-3">Simpan PIN & masuk</button>
@@ -87,31 +86,19 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
           <div className="w-16 h-16 rounded-xl bg-primary text-white grid place-items-center text-3xl mb-4 shadow-md">👨‍🍳</div>
           <h2 className="font-bold text-2xl text-ink mb-1">Selamat Datang</h2>
           <button className="text-sm underline mb-3" onClick={onCloud}>Login Cloud Owner / Dapur</button>
-          <p className="text-sm text-gray-500 mb-4">Pilih nama Anda, lalu masukkan PIN.</p>
+          <p className="text-sm text-gray-500 mb-4">Masukkan PIN Anda untuk mulai.</p>
 
-          <div className="w-full max-w-[280px]">
-            <div role="group" aria-label="Pilih staf" className="flex flex-wrap justify-center gap-2 mb-4">
-              {staff.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  aria-pressed={selected === s.id}
-                  onClick={() => { setPicked(s.id); setError(''); }}
-                  className={`px-3 py-2 rounded-xl border text-sm font-semibold transition-colors ${selected === s.id ? 'bg-primary text-white border-primary' : 'bg-white border-gray-300 hover:bg-gray-100'}`}
-                >
-                  {s.name}
-                  <span className={`block text-[11px] font-normal ${selected === s.id ? 'text-white/80' : 'text-gray-500'}`}>{s.role === 'owner' ? 'Owner' : 'Kasir'}</span>
-                </button>
-              ))}
-            </div>
+          <form className="w-full max-w-[280px]" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <div className="h-12 rounded-xl border border-gray-300 bg-gray-50 grid place-items-center tracking-[0.5em] text-xl mb-1">
-              {pin ? '•'.repeat(pin.length) : <span className="text-gray-400 text-sm tracking-normal">Masukkan PIN</span>}
+              {busy ? <span className="text-gray-400 text-sm tracking-normal">Memeriksa PIN…</span>
+                : pin ? '•'.repeat(pin.length) : <span className="text-gray-400 text-sm tracking-normal">Masukkan PIN</span>}
             </div>
-            {error && <p className="text-center text-sm text-primary-bright mb-1">{error}</p>}
+            {error && <p role="alert" className="text-center text-sm text-primary-bright mb-1">{error}</p>}
             <div className="grid grid-cols-3 gap-2 mt-3">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '←'].map((k) => (
                 <button
                   key={k}
+                  type="button"
                   onClick={() => {
                     setError('');
                     if (k === 'C') setPin('');
@@ -125,14 +112,14 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
               ))}
             </div>
             <button
-              onClick={submit}
-              disabled={busy || pin.length < 4 || !selected}
+              type="submit"
+              disabled={busy || pin.length < 4}
               className="w-full mt-4 h-12 rounded-xl bg-primary hover:bg-primary-bright text-white font-semibold disabled:opacity-40 transition-colors shadow-md"
             >
               Login →
             </button>
-            <p className="text-center text-xs text-gray-400 mt-3">PIN demo: kasir 1111 · owner 1234</p>
-          </div>
+            {demo && <p className="text-center text-xs text-gray-400 mt-3">PIN awal: kasir 1111 · owner 1234 (wajib diganti saat login pertama)</p>}
+          </form>
 
           <div className="flex items-center gap-4 text-xs text-gray-500 mt-8">
             <span>🏬 Main Branch</span>

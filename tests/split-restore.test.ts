@@ -100,7 +100,7 @@ describe('pulihkan dari cloud', () => {
   it('membangun ulang data tablet persis seperti yang disinkron, dengan PIN baru dan identitas perangkat cloud', async () => {
     const cloud = await businessDay();
     const preview = await previewCloudRestore(fakeCloud(cloud), 'tab-old');
-    expect(preview.staff.map(s => s.name)).toEqual(['Budi Santoso', 'Sari']);
+    expect(preview.staff.map(s => s.name)).toEqual(['Owner', 'Kasir']);
     expect(preview.orders).toBe(2);
     await db.products.update(1, { name: 'Data lokal yang akan diganti' });
     await expect(applyCloudRestore(preview, { 1: '246810', 2: '246810' })).rejects.toThrow('berbeda');

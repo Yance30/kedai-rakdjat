@@ -163,7 +163,7 @@ describe('login per staf', () => {
   it('hanya memeriksa PIN staf yang dipilih', async () => {
     await expect(authenticatePin('1234', false, 2)).rejects.toThrow('PIN salah');
     await db.settings.delete('pin_attempts');
-    expect((await authenticatePin('1111', false, 2)).name).toBe('Sari');
+    expect((await authenticatePin('1111', false, 2)).name).toBe('Kasir');
     await expect(authenticatePin('1111', true, 2)).rejects.toThrow('PIN salah');
   });
 });
@@ -198,7 +198,7 @@ describe('penguncian PIN bertingkat', () => {
       await fiveWrong();
       await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 5 menit');
       now += 5 * 60_000 + 1;
-      expect((await authenticatePin('1111', false, 2)).name).toBe('Sari'); // login benar
+      expect((await authenticatePin('1111', false, 2)).name).toBe('Kasir'); // login benar
       await fiveWrong();
       await expect(authenticatePin('1111', false, 2)).rejects.toThrow('Tunggu 15 menit');
       expect((await pinLockLog()).map(e => e.level)).toEqual([3, 2, 1]);
@@ -216,7 +216,7 @@ describe('restore backup dengan hash PIN lama', () => {
     await db.staff.update(2, { pinHash: hashPin('4321') });
     await db.staff.update(1, { pinHash: await secureHash('987654') });
     const backup = await createBackup();
-    expect(legacyPinStaff(backup)).toEqual(['Sari']);
+    expect(legacyPinStaff(backup)).toEqual(['Kasir']);
     await restoreBackup(backup);
     expect((await db.staff.get(1))?.mustChangePin).toBeFalsy();
     const sari = await authenticatePin('4321', false, 2);

@@ -1,8 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-async function login(page: Page, pin: string, staff = 'Budi Santoso') {
-  await page.getByRole('button', { name: new RegExp('^' + staff) }).click();
+async function login(page: Page, pin: string) {
   for (const digit of pin) await page.getByRole('button', { name: digit, exact: true }).click();
   await page.getByRole('button', { name: /^Login →/ }).click();
 }
@@ -28,7 +27,7 @@ test('PIN demo, pembayaran offline dengan printer gagal, reload PWA, refund, tut
   });
   await page.goto('/');
   await login(page, '1234');
-  await expect(page.getByText('Ganti PIN demo terlebih dahulu')).toBeVisible();
+  await expect(page.getByText('Buat PIN pribadi terlebih dahulu')).toBeVisible();
   await page.getByLabel('PIN baru', { exact: true }).fill('987654');
   await page.getByLabel('Ulangi PIN', { exact: true }).fill('987654');
   await page.getByRole('button', { name: 'Simpan PIN & masuk' }).click();
@@ -166,10 +165,10 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   expect(await page.evaluate(()=>(window as any).__prints.join(''))).toContain('*** SALINAN ***');
   expect(await counts(page)).toEqual({orders:1,payments:1,audit:2});
   await page.getByRole('button',{name:'Laporan Penjualan',exact:true}).click();
-  await expect(page.getByText('Rp 66.000',{exact:true}).first()).toBeVisible();
+  await expect(page.getByText('Rp 16.000',{exact:true}).first()).toBeVisible();
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'Ekspor CSV',exact:true}).click();
   const file=await download;expect(file.suggestedFilename()).toMatch(/^penjualan-/);
-  const contents=readFileSync((await file.path())!,'utf8');expect(contents).toContain('4000');expect(contents).toContain('66000');
+  const contents=readFileSync((await file.path())!,'utf8');expect(contents).toContain('4000');expect(contents).toContain('16000');
   await page.screenshot({path:'test-results/laporan-tablet.png',animations:'disabled'});
   await page.getByRole('button',{name:'Stok & Resep',exact:true}).click();
   await expect(page.getByRole('row').filter({hasText:'Biji kopi uji'}).first()).toContainText('960 g');
@@ -203,21 +202,21 @@ test('pisah bill: tamu membayar sebagian item, sisa tetap di meja lalu dilunasi'
   await page.getByRole('button', { name: 'Meja', exact: true }).click();
   await page.getByRole('button', { name: 'Buka Meja' }).first().click();
   const add = page.getByRole('button', { name: '+ Tambah', exact: true });
-  await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Nasi Lemak, 1× Es Teh
+  await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Espresso, 1× Tubruk
   await expect(page.getByText('Simpan & kirim ke dapur dulu untuk memisah bill.')).toBeHidden(); // no saved order yet
   await page.getByRole('button', { name: 'Simpan & ke Dapur' }).click();
   await page.getByRole('button', { name: 'Lanjut / Bayar' }).click();
   await page.getByRole('button', { name: 'Pisah Bill' }).click();
-  await page.getByLabel('Dibayar terpisah: Nasi Lemak Spesial').getByRole('button', { name: '+' }).click();
+  await page.getByLabel('Dibayar terpisah: Espresso').getByRole('button', { name: '+' }).click();
   await page.getByRole('button', { name: 'Bayar Item Terpilih' }).click();
-  await expect(page.getByText('Rp 38.500').first()).toBeVisible();
+  await expect(page.getByText('Rp 11.000').first()).toBeVisible();
   await page.getByRole('button', { name: 'Uang Pas' }).click();
   await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
   await expect(page.getByText('Bill terpisah lunas.')).toBeVisible();
   await page.getByRole('button', { name: 'Lanjutkan Sisa Pesanan' }).click();
   expect(await counts(page)).toEqual({ orders: 2, payments: 1, audit: 1 });
   await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
-  await expect(page.getByText('Rp 51.700').first()).toBeVisible();
+  await expect(page.getByText('Rp 19.800').first()).toBeVisible();
   await page.getByRole('button', { name: 'Uang Pas' }).click();
   await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
   await page.getByRole('button', { name: 'Kembali ke Denah Meja' }).click();
