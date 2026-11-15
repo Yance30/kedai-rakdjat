@@ -1,3 +1,4 @@
+import { askConfirm, askText } from './Dialog';
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { addStaff, resetStaffPin, updateStaff } from '../auth';
@@ -50,17 +51,17 @@ export default function StaffManager({ actor }: { actor: Staff }) {
                 {p.role === 'owner' ? 'Owner' : 'Kasir'} · {p.active ? 'Aktif' : 'Nonaktif'}{p.mustChangePin && p.active ? ' · menunggu ganti PIN' : ''}
               </div>
             </div>
-            <button disabled={busy} className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200" onClick={() => {
-              const next = prompt('Nama baru', p.name);
+            <button disabled={busy} className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200" onClick={async () => {
+              const next = await askText('Nama baru', { title: `Ubah nama ${p.name}`, initial: p.name, confirmLabel: 'Simpan' });
               if (next && next.trim() !== p.name) void run(() => updateStaff(p.id, { name: next }, actor.id!), 'Nama staf diperbarui.');
             }}>Ubah nama</button>
-            <button disabled={busy} className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200" onClick={() => {
-              const next = prompt(`PIN sementara baru untuk ${p.name} (4–6 angka). ${p.name} wajib menggantinya saat login.`);
+            <button disabled={busy} className="text-xs px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200" onClick={async () => {
+              const next = await askText(`PIN sementara baru untuk ${p.name} (4–6 angka). ${p.name} wajib menggantinya saat login.`, { title: 'Reset PIN', inputMode: 'numeric', secret: true, confirmLabel: 'Reset PIN' });
               if (next) void run(() => resetStaffPin(p.id, next.trim(), actor.id!), `PIN ${p.name} direset. Berikan PIN sementara kepadanya.`);
             }}>Reset PIN</button>
             {p.id !== actor.id && (
-              <button disabled={busy} className={`text-xs px-3 py-1.5 rounded-full ${p.active ? 'bg-red-50 text-primary-bright' : 'bg-green-100 text-green-700'}`} onClick={() => {
-                if (p.active && !confirm(`Nonaktifkan ${p.name}? Ia tidak bisa login lagi sampai diaktifkan kembali.`)) return;
+              <button disabled={busy} className={`text-xs px-3 py-1.5 rounded-full ${p.active ? 'bg-red-50 text-primary-bright' : 'bg-green-100 text-green-700'}`} onClick={async () => {
+                if (p.active && !(await askConfirm(`${p.name} tidak bisa login lagi sampai diaktifkan kembali.`, { title: `Nonaktifkan ${p.name}?`, confirmLabel: 'Nonaktifkan', danger: true }))) return;
                 void run(() => updateStaff(p.id, { active: !p.active }, actor.id!), p.active ? `${p.name} dinonaktifkan.` : `${p.name} diaktifkan kembali.`);
               }}>{p.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
             )}

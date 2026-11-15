@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { authenticatePin, changePin } from '../auth';
 import { db } from '../db';
+import { haptic } from '../feedback';
 import type { Staff } from '../types';
 
 export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => void; onCloud: () => void }) {
@@ -36,20 +37,20 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
     try {
       const s = await authenticatePin(pin);
       if (s.mustChangePin) setPending(s); else onLogin(s);
-    } catch (e) { setError((e as Error).message); setPin(''); }
+    } catch (e) { haptic([60, 40, 60]); setError((e as Error).message); setPin(''); }
     finally { setBusy(false); }
   }
-  if (pending) return <div className="h-full grid place-items-center p-6"><form className="max-w-sm space-y-4" onSubmit={async e => {
+  if (pending) return <div className="h-full grid place-items-center p-6 kr-shell"><form className="kr-modal w-full max-w-sm space-y-4 bg-white rounded-3xl p-7 shadow-2xl" onSubmit={async e => {
     e.preventDefault(); if (busy) return; setBusy(true);
     try {
       if (newPin !== confirmPin) throw new Error('Konfirmasi PIN tidak sama.');
       await changePin(pending.id!, newPin);
       onLogin({ ...pending, mustChangePin: false });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
-  }}><h1 className="text-xl font-bold">Buat PIN pribadi terlebih dahulu</h1><p>{pending.name}, PIN ini sementara. Buat PIN baru yang hanya Anda ketahui; PIN ini dipakai untuk login berikutnya.</p>
-    <input aria-label="PIN baru" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="PIN baru (4–6 angka)" value={newPin} onChange={e => setNewPin(e.target.value)} />
-    <input aria-label="Ulangi PIN" className="border rounded p-3 w-full" type="password" inputMode="numeric" placeholder="Ulangi PIN" value={confirmPin} onChange={e => setConfirmPin(e.target.value)} />
-    {error && <p role="alert">{error}</p>}<button disabled={busy} className="bg-primary text-white rounded p-3">Simpan PIN & masuk</button>
+  }}><p className="eyebrow">KEAMANAN AKUN</p><h1 className="text-xl font-bold text-primary">Buat PIN pribadi terlebih dahulu</h1><p className="text-sm text-gray-600">{pending.name}, PIN ini sementara. Buat PIN baru yang hanya Anda ketahui; PIN ini dipakai untuk login berikutnya.</p>
+    <input aria-label="PIN baru" className="border border-gray-300 rounded-xl p-3 w-full" type="password" inputMode="numeric" placeholder="PIN baru (4–6 angka)" value={newPin} onChange={e => setNewPin(e.target.value)} />
+    <input aria-label="Ulangi PIN" className="border border-gray-300 rounded-xl p-3 w-full" type="password" inputMode="numeric" placeholder="Ulangi PIN" value={confirmPin} onChange={e => setConfirmPin(e.target.value)} />
+    {error && <p key={error} role="alert" className="kr-shake text-sm text-primary-bright">{error}</p>}<button disabled={busy} className="w-full h-12 bg-primary hover:bg-primary-bright text-white font-semibold rounded-xl shadow-md">Simpan PIN & masuk</button>
   </form></div>;
 
   return (
@@ -89,18 +90,23 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
           <p className="text-sm text-gray-500 mb-4">Masukkan PIN Anda untuk mulai.</p>
 
           <form className="w-full max-w-[280px]" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
-            <div className="h-12 rounded-xl border border-gray-300 bg-gray-50 grid place-items-center tracking-[0.5em] text-xl mb-1">
-              {busy ? <span className="text-gray-400 text-sm tracking-normal">Memeriksa PIN…</span>
-                : pin ? '•'.repeat(pin.length) : <span className="text-gray-400 text-sm tracking-normal">Masukkan PIN</span>}
+            <div key={error || 'pin'} className={`h-12 rounded-xl border bg-gray-50 grid place-items-center mb-1 transition-colors ${error ? 'kr-shake border-primary-bright/60' : 'border-gray-300'}`}>
+              {busy ? <span className="kr-breathe text-gray-400 text-sm">Memeriksa PIN…</span>
+                : pin ? (
+                  <span className="flex gap-3" aria-label={`${pin.length} digit dimasukkan`}>
+                    {Array.from(pin).map((_, i) => <span key={i} className="kr-zoom w-3 h-3 rounded-full bg-primary" />)}
+                  </span>
+                ) : <span className="text-gray-400 text-sm">Masukkan PIN</span>}
             </div>
-            {error && <p role="alert" className="text-center text-sm text-primary-bright mb-1">{error}</p>}
-            <div className="grid grid-cols-3 gap-2 mt-3">
+            {error && <p role="alert" className="kr-fade-up text-center text-sm text-primary-bright mb-1">{error}</p>}
+            <div className="kr-stagger grid grid-cols-3 gap-2 mt-3">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '←'].map((k) => (
                 <button
                   key={k}
                   type="button"
                   onClick={() => {
                     setError('');
+                    haptic(8);
                     if (k === 'C') setPin('');
                     else if (k === '←') setPin((p) => p.slice(0, -1));
                     else if (pin.length < 6) setPin((p) => p + k);

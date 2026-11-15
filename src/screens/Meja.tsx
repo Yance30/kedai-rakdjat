@@ -28,16 +28,17 @@ export default function Meja({ onOpen }: { onOpen: (tableId: number) => void }) 
         </div>
       </div>
       <p className="text-sm text-gray-500 mb-6">Ketuk meja kosong untuk mulai pesanan, atau meja terisi untuk melanjutkan / membayar.</p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+      {tables.length === 0 && <div className="empty-state">Belum ada meja. Owner dapat menambah meja di Pengaturan → Meja.</div>}
+      <div className="kr-stagger grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {tables.map((t) => {
           const order = openOrders.find((o) => o.tableId === t.id);
           const s = STATUS[t.status];
           return (
-            <div key={t.id} className={`rounded-2xl border-2 p-5 flex flex-col shadow-sm transition hover:shadow-md ${s.cls}`}>
+            <div key={t.id} className={`rounded-2xl border-2 p-5 flex flex-col shadow-sm transition duration-300 hover:shadow-md hover:-translate-y-0.5 ${s.cls}`}>
               <div className="flex items-center justify-between mb-1">
                 <span className="font-display font-bold text-3xl">{t.name}</span>
                 <span className="flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full bg-white/70">
-                  <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                  <span className={`w-2 h-2 rounded-full ${s.dot} ${t.status === 'occupied' ? 'kr-live' : ''}`} />
                   {s.label}
                 </span>
               </div>

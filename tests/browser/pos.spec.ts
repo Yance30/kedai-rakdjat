@@ -224,3 +224,44 @@ test('pisah bill: tamu membayar sebagian item, sisa tetap di meja lalu dilunasi'
   expect(await counts(page)).toEqual({ orders: 2, payments: 2, audit: 2 });
   expect(errors).toEqual([]);
 });
+
+test('dialog aplikasi, papan angka uang diterima dan kelola meja', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  page.on('dialog', d => { errors.push('native dialog: ' + d.message()); void d.dismiss(); });
+  await setupOwner(page);
+
+  // Clearing the cart asks through the in-app dialog; cancelling keeps the items.
+  await page.getByRole('button', { name: '+ Tambah', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Kosongkan keranjang' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Kosongkan keranjang?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Batal' }).click();
+  await expect(page.getByText('Belum ada item.')).toBeHidden();
+
+  // Cash typed on the keypad is shown with thousands separators and gives change.
+  await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
+  for (const k of ['1', '000', '000']) await page.getByRole('button', { name: `Angka ${k}`, exact: true }).click();
+  await expect(page.getByLabel('Uang diterima', { exact: true })).toHaveValue('1.000.000');
+  await page.getByRole('button', { name: 'Hapus angka' }).click();
+  await expect(page.getByLabel('Uang diterima', { exact: true })).toHaveValue('100.000');
+  await expect(page.getByText('Kembalian:')).toBeVisible();
+  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
+  await expect(page.getByText('Pembayaran Berhasil', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Transaksi Baru' }).click();
+
+  // Owner adds and renames a table; it appears on the floor plan.
+  await page.getByRole('button', { name: 'Pengaturan', exact: true }).click();
+  await page.getByLabel('Nama meja baru').fill('Teras 1');
+  await page.getByRole('button', { name: 'Tambah Meja' }).click();
+  await expect(page.getByText('Meja ditambahkan.')).toBeVisible();
+  await page.getByRole('button', { name: 'Ganti nama meja Teras 1' }).click();
+  const rename = page.getByRole('dialog', { name: 'Ganti nama Teras 1' });
+  await rename.getByRole('textbox').fill('Teras VIP');
+  await rename.getByRole('button', { name: 'Simpan' }).click();
+  await expect(page.getByText('Nama meja diperbarui.')).toBeVisible();
+  await page.getByRole('button', { name: 'Meja', exact: true }).click();
+  await expect(page.getByText('Teras VIP', { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});

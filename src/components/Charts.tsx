@@ -28,7 +28,7 @@ export function BarChart({ data, color = '#8a000a', height = 150 }: { data: Poin
         const y = H - padB - h;
         return (
           <g key={i}>
-            <rect x={x} y={y} width={bw} height={Math.max(1, h)} rx={4} fill={color} opacity={d.value === 0 ? 0.25 : 0.9} />
+            <rect className="kr-bar" style={{ animationDelay: `${i * 0.04}s` }} x={x} y={y} width={bw} height={Math.max(1, h)} rx={4} fill={color} opacity={d.value === 0 ? 0.25 : 0.9} />
             {d.value > 0 && (
               <text x={x + bw / 2} y={y - 4} textAnchor="middle" fontSize={8.5} fill="#5b403d" className="tabular-nums">
                 {short(d.value)}
@@ -62,10 +62,10 @@ export function AreaChart({ data, color = '#b31217', height = 140 }: { data: Poi
       ))}
       {data.length > 0 && (
         <>
-          <path d={area} fill={color} opacity={0.12} />
-          <path d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+          <path className="kr-area" d={area} fill={color} opacity={0.12} />
+          <path className="kr-line-draw" pathLength={1} d={line} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
           {data.map((d, i) => (
-            <circle key={i} cx={px(i)} cy={py(d.value)} r={2.5} fill={color} />
+            <circle key={i} className="kr-dot" style={{ animationDelay: `${0.5 + (i / n) * 0.6}s` }} cx={px(i)} cy={py(d.value)} r={2.5} fill={color} />
           ))}
           {data.map((d, i) => (
             <text key={i} x={px(i)} y={H - 6} textAnchor="middle" fontSize={8.5} fill={AXIS}>
@@ -85,7 +85,7 @@ export function DonutChart({ segments, centerLabel }: { segments: { label: strin
   let acc = 0;
   return (
     <div className="flex items-center gap-5">
-      <svg viewBox="0 0 100 100" className="w-28 h-28 shrink-0" role="img" aria-label="Komposisi pembayaran">
+      <svg viewBox="0 0 100 100" className="kr-donut w-28 h-28 shrink-0" role="img" aria-label="Komposisi pembayaran">
         <circle cx={50} cy={50} r={r} fill="none" stroke={GRID} strokeWidth={14} />
         {total > 0 &&
           segments.map((s, i) => {

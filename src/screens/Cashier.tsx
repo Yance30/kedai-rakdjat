@@ -1,6 +1,8 @@
+import { askConfirm } from '../components/Dialog';
 import { useEffect, useState, useRef } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
+import { haptic } from '../feedback';
 import { rupiah } from '../money';
 import { buildBill, buildReceipt, buildTicket, connectPrinter, printBytes, printerAvailable, printerConnected } from '../printer';
 import { pushAll } from '../sync';
@@ -90,6 +92,7 @@ export default function Cashier({
 
   function add(p: Product) {
     if (busy || splitting || !draft.cart || draft.error || products.find(item=>item.id===p.id)?.soldOut) return;
+    haptic(10);
     const found = lines.find(l => l.product.id === p.id);
     draft.update(found ? lines.map(l => l.product.id === p.id ? { ...l, qty: l.qty + 1 } : l) : [...lines, { product: p, qty: 1 }]);
   }
@@ -120,9 +123,10 @@ export default function Cashier({
           setPrinterMsg('Pembayaran tersimpan, tetapi struk gagal dicetak. Jangan ulangi pembayaran.');
         }
       }
+      haptic([30, 50, 60]);
       setSuccess({ id, total, method, change: tendered - total, split: true });
       void pushAll();
-    } catch (e) { setSaleError((e as Error).message); }
+    } catch (e) { haptic([60, 40, 60]); setSaleError((e as Error).message); }
     finally { working.current = false; setBusy(false); }
   }
 
@@ -173,6 +177,7 @@ export default function Cashier({
         setPrinterMsg('Pembayaran tersimpan, tetapi struk gagal dicetak. Jangan ulangi pembayaran.');
       }
     }
+    haptic([30, 50, 60]);
     setSuccess({ id, total, method, change: tendered - total });
     setPaying(false);
     void pushAll();
@@ -305,16 +310,24 @@ export default function Cashier({
             </button>
           ))}
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {shown.length === 0 && products.length > 0 && (
+          <div className="empty-state kr-fade-up">
+            Tidak ada menu yang cocok dengan “{q}”.{' '}
+            <button className="underline text-primary" onClick={() => { setQ(''); setCat('Semua'); }}>Tampilkan semua</button>
+          </div>
+        )}
+        <div key={cat} className="kr-stagger grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {shown.map((p) => (
-            <div key={p.id} className="bg-white rounded-2xl border border-gray-200/80 p-4 flex flex-col shadow-sm transition hover:shadow-md hover:-translate-y-0.5">
-              {p.photo ? (
-                <img src={p.photo} alt={p.name} className="h-28 w-full object-cover rounded-xl mb-3" />
-              ) : (
-                <div className="h-28 rounded-xl bg-gradient-to-br from-maroon to-primary mb-3 grid place-items-center text-brass-soft font-display font-semibold text-xl px-2 text-center">
-                  {p.name.split(' ')[0]}
-                </div>
-              )}
+            <div key={p.id} className={`kr-card bg-white rounded-2xl border border-gray-200/80 p-4 flex flex-col shadow-sm hover:shadow-md hover:-translate-y-0.5 ${p.soldOut ? 'opacity-60' : ''}`}>
+              <div className="h-28 rounded-xl overflow-hidden mb-3">
+                {p.photo ? (
+                  <img src={p.photo} alt={p.name} className="kr-card-media h-full w-full object-cover" />
+                ) : (
+                  <div className="kr-card-media h-full bg-gradient-to-br from-maroon to-primary grid place-items-center text-brass-soft font-display font-semibold text-xl px-2 text-center">
+                    {p.name.split(' ')[0]}
+                  </div>
+                )}
+              </div>
               <div className="font-semibold truncate">{p.name}</div>
               <div className="text-primary font-bold mb-3 tabular-nums">{rupiah(p.price)}</div>
               <button
@@ -360,12 +373,12 @@ export default function Cashier({
         )}
         {splitting && <p className="text-xs text-gray-600 mb-2">Pilih item yang dibayar tamu ini. Sisanya tetap di meja.</p>}
         <div className="flex-1 overflow-y-auto space-y-3">
-          {lines.length > 0 && !splitting && <button disabled={busy || draft.saving} onClick={() => { if (confirm('Kosongkan keranjang ini? Pesanan yang sudah dikirim ke dapur tetap tersimpan.')) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
+          {lines.length > 0 && !splitting && <button disabled={busy || draft.saving} onClick={async () => { if (await askConfirm('Pesanan yang sudah dikirim ke dapur tetap tersimpan.', { title: 'Kosongkan keranjang?', confirmLabel: 'Kosongkan', danger: true })) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
           {lines.length === 0 && <p className="text-sm text-gray-400">Belum ada item.</p>}
           {lines.map((l) => {
             const picked = pick[l.product.id!] ?? 0;
             return (
-            <div key={l.product.id} className="flex items-center gap-2">
+            <div key={l.product.id} className="kr-line-in flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{l.product.name}</div>
                 <div className="text-xs text-gray-500">{rupiah(l.product.price)}{splitting && ` · ${l.qty} di meja`}</div>
@@ -373,13 +386,13 @@ export default function Cashier({
               {splitting ? (
                 <div className="flex items-center gap-2" aria-label={`Dibayar terpisah: ${l.product.name}`}>
                   <button onClick={() => setPicked(l.product.id!, picked - 1, l.qty)} className="w-7 h-7 rounded-md bg-gray-100 hover:bg-gray-200">−</button>
-                  <span className={`w-9 text-center text-sm ${picked ? 'font-semibold text-primary' : 'text-gray-400'}`}>{picked}/{l.qty}</span>
+                  <span className={`w-9 text-center text-sm ${picked ? 'font-semibold text-primary' : 'text-gray-400'}`}><span key={picked} className="kr-pop">{picked}</span>/{l.qty}</span>
                   <button onClick={() => setPicked(l.product.id!, picked + 1, l.qty)} className="w-7 h-7 rounded-md bg-primary text-white">+</button>
                 </div>
               ) : (
               <div className="flex items-center gap-2">
                 <button onClick={() => dec(l.product.id!)} className="w-7 h-7 rounded-md bg-gray-100 hover:bg-gray-200">−</button>
-                <span className="w-5 text-center text-sm">{l.qty}</span>
+                <span className="w-5 text-center text-sm"><span key={l.qty} className="kr-pop font-semibold">{l.qty}</span></span>
                 <button onClick={() => add(l.product)} className="w-7 h-7 rounded-md bg-primary text-white">+</button>
               </div>
               )}
@@ -387,11 +400,11 @@ export default function Cashier({
             );
           })}
         </div>
-        <details className="mt-3 text-sm"><summary className="cursor-pointer py-2">Diskon dengan PIN owner</summary><div className="space-y-2">
-          <label>Jenis diskon<select aria-label="Jenis diskon" className="w-full border rounded p-2" value={discountMode} onChange={e=>{setDiscountMode(e.target.value);setDiscountInput('');}}><option value="rupiah">Rupiah</option><option value="persen">Persen</option></select></label>
-          <label>Nilai diskon<input aria-label="Nilai diskon" className="w-full border rounded p-2" type="number" min="0" value={discountInput} onChange={e=>setDiscountInput(e.target.value)}/></label>
-          {discount>0&&<><label>Alasan diskon<input aria-label="Alasan diskon" className="w-full border rounded p-2" value={discountReason} onChange={e=>setDiscountReason(e.target.value)}/></label><label>PIN owner diskon<input aria-label="PIN owner diskon" className="w-full border rounded p-2" type="password" inputMode="numeric" autoComplete="off" value={discountPin} onChange={e=>setDiscountPin(e.target.value)}/></label><p className="text-xs text-gray-500">Diskon diterapkan sebelum service dan pajak; persetujuan dicatat saat pembayaran. PIN tidak disimpan.</p></>}
-          {!discountValid&&<p role="alert">Diskon harus lebih kecil dari subtotal.</p>}</div></details>
+        <details className="mt-3 text-sm rounded-xl border border-gray-200 px-3"><summary className="cursor-pointer py-2.5 font-medium text-gray-700">Diskon dengan PIN owner{discount > 0 && <span className="ml-2 text-xs font-semibold text-primary">−{rupiah(discount)}</span>}</summary><div className="space-y-2 pb-3">
+          <div className="grid grid-cols-2 gap-2"><label className="">Jenis diskon<select aria-label="Jenis diskon" className="" value={discountMode} onChange={e=>{setDiscountMode(e.target.value);setDiscountInput('');}}><option value="rupiah">Rupiah</option><option value="persen">Persen</option></select></label>
+          <label className="">Nilai diskon<input aria-label="Nilai diskon" className="" type="number" min="0" inputMode="numeric" placeholder={discountMode==='persen'?'%':'Rp'} value={discountInput} onChange={e=>setDiscountInput(e.target.value)}/></label></div>
+          {discount>0&&<div className="kr-fade-up space-y-2"><label className="">Alasan diskon<input aria-label="Alasan diskon" className="" placeholder="mis. pelanggan tetap" value={discountReason} onChange={e=>setDiscountReason(e.target.value)}/></label><label className="">PIN owner diskon<input aria-label="PIN owner diskon" className="" type="password" inputMode="numeric" autoComplete="off" value={discountPin} onChange={e=>setDiscountPin(e.target.value)}/></label><p className="text-xs text-gray-500">Diskon diterapkan sebelum service dan pajak; persetujuan dicatat saat pembayaran. PIN tidak disimpan.</p></div>}
+          {!discountValid&&<p role="alert" className="kr-shake text-xs text-primary-bright">Diskon harus lebih kecil dari subtotal.</p>}</div></details>
         <div className="border-t border-gray-200 pt-3 mt-3 space-y-1 text-sm">
           {splitting && <div className="text-xs font-semibold text-primary uppercase tracking-wide">Bagian yang dibayar</div>}
           <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>{rupiah(subtotal)}</span></div>
@@ -400,7 +413,7 @@ export default function Cashier({
             <div className="flex justify-between"><span className="text-gray-500">Service ({serviceRate}%)</span><span>{rupiah(service)}</span></div>
           )}
           <div className="flex justify-between"><span className="text-gray-500">Pajak (10%)</span><span>{rupiah(tax)}</span></div>
-          <div className="flex justify-between font-bold text-base pt-1"><span>Total</span><span className="text-primary font-display text-xl tabular-nums">{rupiah(total)}</span></div>
+          <div className="flex justify-between font-bold text-base pt-1"><span>Total</span><span key={total} className="kr-pop text-primary font-display text-xl tabular-nums">{rupiah(total)}</span></div>
         </div>
         {tableId && (
           <div className="flex gap-2 mt-3">
@@ -431,17 +444,24 @@ export default function Cashier({
         </button>
       </div>
 
-      {saleError && <div role="alert" className="fixed bottom-4 left-4 md:left-24 z-[60] bg-red-50 text-primary p-4 rounded shadow">{saleError}</div>}
+      {saleError && (
+        <div key={saleError} role="alert" className="kr-toast fixed bottom-4 left-4 md:left-24 z-[60] max-w-md bg-red-50 border border-red-200 text-primary p-4 rounded-xl shadow-lg flex items-start gap-3">
+          <span className="flex-1">{saleError}</span>
+          <button onClick={() => setSaleError('')} className="text-primary/60 hover:text-primary" aria-label="Tutup pesan">✕</button>
+        </div>
+      )}
       {paying && <PayModal busy={busy} total={total} qrisImage={getSetting('qris_image') || `${import.meta.env.BASE_URL}qris.png`} onCancel={() => { if (!working.current) setPaying(false); }} onConfirm={confirmPay} />}
 
       {success && (
-        <div className="fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
-          <div className="w-96 bg-white rounded-3xl p-8 text-center shadow-xl kr-zoom">
-            <div className="w-14 h-14 rounded-full bg-green-100 text-green-700 grid place-items-center text-2xl mx-auto mb-4">✓</div>
+        <div className="kr-backdrop fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
+          <div className="w-96 bg-white rounded-3xl p-8 text-center shadow-xl kr-modal">
+            <div className="kr-check-ring kr-zoom w-14 h-14 rounded-full bg-green-100 text-green-700 grid place-items-center mx-auto mb-4">
+              <svg viewBox="0 0 24 24" className="kr-check w-7 h-7" fill="none" stroke="currentColor" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
+            </div>
             <h2 className="font-display font-bold text-xl mb-1">Pembayaran Berhasil</h2>
             {printerMsg && <p role="alert" className="text-sm text-primary mb-2">{printerMsg}</p>}
             <p className="text-sm text-gray-500 mb-4">Order #{success.id} · {success.method === 'cash' ? 'Tunai' : 'QRIS'}</p>
-            <div className="text-3xl font-display font-bold text-primary mb-1 tabular-nums">{rupiah(success.total)}</div>
+            <div className="kr-fade-up text-3xl font-display font-bold text-primary mb-1 tabular-nums" style={{ animationDelay: '0.25s' }}>{rupiah(success.total)}</div>
             {success.method === 'cash' && (
               <div className="text-sm text-gray-600 mb-4">Kembalian: <span className="font-semibold">{rupiah(success.change)}</span></div>
             )}
@@ -471,11 +491,13 @@ function PayModal({
 }) {
   const [method, setMethod] = useState<'cash' | 'qris'>('cash');
   const [tendered, setTendered] = useState('');
+  // Digits only, capped at 10 so the amount stays a safe integer, without leading zeros.
+  const digits = (v: string) => v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 10);
   const cashValid = Number(tendered) >= total;
 
   return (
-    <div className="fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
-      <div className="w-[28rem] bg-white rounded-3xl p-6 shadow-xl kr-zoom">
+    <div className="kr-backdrop fixed inset-0 bg-maroon-deep/50 backdrop-blur-sm grid place-items-center z-50">
+      <div className="w-[28rem] bg-white rounded-3xl p-6 shadow-xl kr-modal">
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-display font-bold text-lg">Pembayaran</h2>
           <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">✕</button>
@@ -496,14 +518,33 @@ function PayModal({
           </button>
         </div>
         {method === 'cash' ? (
-          <>
-            <input
-              type="number"
-              value={tendered}
-              onChange={(e) => setTendered(e.target.value)}
-              placeholder="Uang diterima"
-              className="w-full h-12 rounded-lg border border-gray-300 px-4 text-lg mb-3"
-            />
+          <div key="cash" className="kr-fade-up">
+            <label className="relative block mb-3">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">Rp</span>
+              <input
+                aria-label="Uang diterima"
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                value={tendered ? Number(tendered).toLocaleString('id-ID') : ''}
+                onChange={(e) => setTendered(digits(e.target.value))}
+                placeholder="Uang diterima"
+                className="w-full h-12 rounded-lg border border-gray-300 pl-12 pr-4 text-lg font-semibold tabular-nums"
+              />
+            </label>
+            <div role="group" className="grid grid-cols-3 gap-1.5 mb-3" aria-label="Papan angka uang diterima">
+              {['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', '⌫'].map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-label={k === '⌫' ? 'Hapus angka' : `Angka ${k}`}
+                  onClick={() => { haptic(8); setTendered((t) => k === '⌫' ? t.slice(0, -1) : digits(t + k)); }}
+                  className="h-10 rounded-lg bg-gray-100 hover:bg-gray-200 active:bg-primary active:text-white font-semibold"
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
             <div className="flex gap-2 flex-wrap mb-4">
               <button onClick={() => setTendered(String(total))} className="px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-sm">Uang Pas</button>
               {[50000, 100000, 200000].map((v) => (
@@ -513,11 +554,11 @@ function PayModal({
               ))}
             </div>
             {cashValid && (
-              <div className="text-sm text-gray-600 mb-4">Kembalian: <span className="font-semibold">{rupiah(Number(tendered) - total)}</span></div>
+              <div className="text-sm text-gray-600 mb-4">Kembalian: <span key={tendered} className="kr-pop font-semibold text-green-700">{rupiah(Number(tendered) - total)}</span></div>
             )}
-          </>
+          </div>
         ) : (
-          <div className="rounded-xl border-2 border-dashed border-gray-300 p-6 text-center mb-4">
+          <div key="qris" className="kr-zoom rounded-xl border-2 border-dashed border-gray-300 p-6 text-center mb-4">
             {qrisImage ? (
               <>
                 <img src={qrisImage} alt="QRIS Kedai Rakdjat" className="h-64 w-64 object-contain mx-auto mb-1 bg-white" />

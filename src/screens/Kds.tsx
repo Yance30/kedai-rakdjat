@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { chime, haptic, unlockAudio } from '../feedback';
 import { loadSupabase } from '../supabase';
+
+const SOUND_KEY = 'kds_sound';
+function readSoundPref() { try { return localStorage.getItem(SOUND_KEY) === 'on'; } catch { return false; } }
 
 interface KdsOrder {
   device_id: string;
@@ -34,6 +38,19 @@ export default function Kds({ device }: { device: string }) {
   const [tables, setTables] = useState<{ local_id: number; name: string }[]>([]);
   const [now, setNow] = useState(Date.now());
   const [msg, setMsg] = useState('');
+  const [sound, setSound] = useState(false);
+  const wantSound = useRef(readSoundPref());
+  // Ticket keys already shown; null until the first load so opening the screen does not ring.
+  const seen = useRef<Set<string> | null>(null);
+
+  async function toggleSound() {
+    const next = !sound;
+    const ok = next ? await unlockAudio() : true;
+    setSound(next && ok);
+    wantSound.current = next && ok;
+    try { localStorage.setItem(SOUND_KEY, next && ok ? 'on' : 'off'); } catch { /* private mode */ }
+    if (next && ok) chime();
+  }
 
   const refresh = useCallback(async () => {
     const sb = await loadSupabase();
@@ -52,6 +69,9 @@ export default function Kds({ device }: { device: string }) {
       return;
     }
     const open = o.data as KdsOrder[];
+    const incoming = open.filter((x) => !x.split_from_local_id && (x.kds_status || 'incoming') === 'incoming').map((x) => `${x.device_id}-${x.local_id}`);
+    if (seen.current && incoming.some((k) => !seen.current!.has(k))) { chime(); haptic([80, 60, 80]); }
+    seen.current = new Set([...(seen.current ?? []), ...incoming]);
     setOrders(open);
     setTables(t.data as { local_id: number; name: string }[]);
     if (open.length) {
@@ -106,7 +126,12 @@ export default function Kds({ device }: { device: string }) {
           <h1 className="font-bold text-xl">Kitchen Display System</h1>
           <p className="text-sm text-gray-500">Tiket dapur dari cloud · diperbarui tiap 8 detik.</p>
         </div>
-        <button onClick={refresh} className="h-10 px-4 rounded-lg bg-white border border-gray-200 text-sm font-medium">Segarkan</button>
+        <div className="flex gap-2">
+          <button onClick={toggleSound} aria-pressed={sound} title={wantSound.current && !sound ? 'Ketuk untuk menyalakan kembali suara setelah halaman dibuka' : 'Bunyi saat ada tiket baru'} className={`h-10 px-4 rounded-lg border text-sm font-medium ${sound ? 'bg-green-100 border-green-300 text-green-800' : 'bg-white border-gray-200'}`}>
+            {sound ? '🔔 Suara aktif' : '🔕 Nyalakan suara'}
+          </button>
+          <button onClick={refresh} className="h-10 px-4 rounded-lg bg-white border border-gray-200 text-sm font-medium">Segarkan</button>
+        </div>
       </div>
       {msg && <p className="text-sm text-primary-bright mb-4">{msg}</p>}
       <div className="grid lg:grid-cols-3 gap-4">
@@ -114,14 +139,17 @@ export default function Kds({ device }: { device: string }) {
           const list = orders.filter((o) => !o.split_from_local_id && (o.kds_status || 'incoming') === col.key);
           return (
             <div key={col.key} className={`rounded-xl border-2 p-4 ${col.cls}`}>
-              <div className="font-semibold mb-3 flex justify-between">{col.label}<span className="text-sm text-gray-500">{list.length}</span></div>
-              <div className="space-y-3">
+              <div className="font-semibold mb-3 flex justify-between">{col.label}<span key={list.length} className="kr-pop text-sm text-gray-500">{list.length}</span></div>
+              <div className="kr-stagger space-y-3">
                 {list.length === 0 && <p className="text-sm text-gray-400">Kosong.</p>}
-                {list.map((o) => (
-                  <div key={`${o.device_id}-${o.local_id}`} className="bg-white rounded-lg border border-gray-200 p-3">
+                {list.map((o) => {
+                  // Tickets still waiting after 15 minutes pulse so the kitchen notices them.
+                  const late = col.next && now - o.created_at > 15 * 60_000;
+                  return (
+                  <div key={`${o.device_id}-${o.local_id}`} className={`bg-white rounded-lg border p-3 ${late ? 'kr-urgent border-primary-bright/50' : 'border-gray-200'}`}>
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-bold">#{o.local_id} · {tableName(o.table_local_id)}</span>
-                      <span className="text-xs text-gray-500">{elapsed(o.created_at, now)}</span>
+                      <span className={`text-xs ${late ? 'text-primary-bright font-semibold' : 'text-gray-500'}`}>{elapsed(o.created_at, now)}</span>
                     </div>
                     <ul className="text-sm space-y-0.5 mb-3">
                       {ticketItems(o.local_id).map((i, idx) => (
@@ -134,7 +162,8 @@ export default function Kds({ device }: { device: string }) {
                       </button>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );

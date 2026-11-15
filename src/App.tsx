@@ -38,6 +38,11 @@ const ICONS: Record<string, string> = {
   kds: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3 2.5.5 5 2.5 5 6a5 5 0 1 1-10 0c0-1.5.5-3 2-4.5.5 1.5 1 2 1.5 2Z M12 2c1 3 2.5 3.5 4 5 1.5 1.5 3 3.5 3 7',
   cloud: 'M3 3v18h18 M7 15v3 M12 10v8 M17 6v12',
   pengaturan: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
+  penjualan: 'M3 17l6-6 4 4 8-8 M14 7h7v7',
+  menu: 'M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2 M7 2v20 M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7',
+  biaya: 'M12 2v20 M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
+  stok: 'M21 8 12 3 3 8v8l9 5 9-5Z M3 8l9 5 9-5 M12 13v8',
+  panduan: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z M9 12l2 2 4-4',
 };
 
 function Icon({ name }: { name: string }) {
@@ -100,7 +105,14 @@ export default function App() {
   }, []);
 
   if (!ready) {
-    return <div className="h-full grid place-items-center text-primary font-display font-bold text-3xl">Kedai Rakdjat</div>;
+    return (
+      <div className="h-full grid place-items-center kr-shell">
+        <div className="text-center kr-zoom">
+          <div className="kr-breathe w-16 h-16 rounded-full border border-brass/60 grid place-items-center font-display font-bold text-brass-soft text-2xl mx-auto mb-4">KR</div>
+          <div className="font-display font-semibold text-2xl text-white">Kedai Rakdjat</div>
+        </div>
+      </div>
+    );
   }
 
   if (cloudPortal) return <CloudPortal onBack={() => setCloudPortal(false)} />;
@@ -118,7 +130,7 @@ export default function App() {
   }
 
   if (!shift) {
-    return <div className="h-full grid place-items-center text-gray-500">Memuat...</div>;
+    return <div className="h-full grid place-items-center text-gray-500"><span className="kr-breathe">Memuat…</span></div>;
   }
 
   const nav: { key: typeof tab; label: string; icon: string; ownerOnly?: boolean; active?: boolean }[] = [
@@ -126,11 +138,11 @@ export default function App() {
     { key: 'meja', label: 'Meja', icon: 'meja', active: tab === 'meja' || (tab === 'kasir' && !!activeTable) },
     { key: 'laporan', label: 'Keuangan', icon: 'keuangan' },
     { key: 'riwayat', label: 'Riwayat', icon: 'riwayat' },
-    { key: 'penjualan', label: 'Laporan Penjualan', icon: 'cloud', ownerOnly: true },
-    { key: 'menu', label: 'Kelola Menu', icon: 'meja', ownerOnly: true },
-    { key: 'biaya', label: 'Pengeluaran', icon: 'keuangan', ownerOnly: true },
-    { key: 'panduan', label: 'Panduan & Backup', icon: 'pengaturan', ownerOnly: true },
-    { key: 'stok', label: 'Stok & Resep', icon: 'meja', ownerOnly: true },
+    { key: 'penjualan', label: 'Laporan Penjualan', icon: 'penjualan', ownerOnly: true },
+    { key: 'menu', label: 'Kelola Menu', icon: 'menu', ownerOnly: true },
+    { key: 'biaya', label: 'Pengeluaran', icon: 'biaya', ownerOnly: true },
+    { key: 'panduan', label: 'Panduan & Backup', icon: 'panduan', ownerOnly: true },
+    { key: 'stok', label: 'Stok & Resep', icon: 'stok', ownerOnly: true },
     { key: 'kds', label: 'KDS Dapur', icon: 'kds' },
     { key: 'cloud', label: 'Dashboard Owner', icon: 'cloud', ownerOnly: true },
     { key: 'pengaturan', label: 'Pengaturan', icon: 'pengaturan' },
@@ -149,7 +161,7 @@ export default function App() {
           </div>
         </div>
         <div className="h-px bg-white/10 mx-2 mb-4" />
-        <nav className="space-y-1 overflow-y-auto min-h-0">
+        <nav className="kr-stagger space-y-1 overflow-y-auto min-h-0">
           {nav
             .filter((n) => !n.ownerOnly || staff.role === 'owner')
             .map((n) => {
@@ -162,7 +174,7 @@ export default function App() {
                     active ? 'bg-white/10 text-white' : 'text-white/55 hover:bg-white/5 hover:text-white'
                   }`}
                 >
-                  {active && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r bg-brass" />}
+                  {active && <span className="kr-indicator absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 rounded-r bg-brass" />}
                   <Icon name={n.icon} />
                   {n.label}
                 </button>
@@ -172,7 +184,7 @@ export default function App() {
         <div className="mt-auto pt-2">
           {staff.role === 'owner' && (!syncSettings.find(s=>s.key==='last_backup_download') || Date.now()-Number(syncSettings.find(s=>s.key==='last_backup_download')?.value)>86400000) && <button className="text-xs text-amber-200 p-2" onClick={()=>go('panduan')}>Pengingat: unduh backup hari ini</button>}
           <div className="flex items-center gap-2 px-2 mb-3 text-xs text-white/50">
-            <span className={`w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`} />
+            <span className={`kr-live w-2 h-2 rounded-full ${online ? 'bg-green-400' : 'bg-red-400'}`} />
             {online ? (syncError ? 'Online · sync menunggu' : lastSync ? 'Online · sync berhasil' : 'Online · belum sync') : 'Offline · mode lokal'}
           </div>
           <div className="bg-white/5 rounded-xl p-3 flex items-center gap-3">

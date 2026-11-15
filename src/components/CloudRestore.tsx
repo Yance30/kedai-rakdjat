@@ -1,3 +1,4 @@
+import { askConfirm } from './Dialog';
 import { useState } from 'react';
 import { applyCloudRestore, previewCloudRestore, type CloudPreview } from '../cloud-restore';
 import { deviceId, loadSupabase } from '../supabase';
@@ -27,7 +28,7 @@ export default function CloudRestore({ device, role }: { device: string; role: s
   }
   async function restore() {
     if (!preview) return;
-    if (!confirm(`Ganti seluruh data tablet ini dengan data cloud ${preview.device} (${preview.orders} pesanan)? Salinan data tablet saat ini disimpan dulu.`)) return;
+    if (!(await askConfirm(`Ganti seluruh data tablet ini dengan data cloud ${preview.device} (${preview.orders} pesanan)? Salinan data tablet saat ini disimpan dulu.`, { title: 'Pulihkan dari cloud?', confirmLabel: 'Pulihkan', danger: true }))) return;
     setBusy(true); setMsg('Membuat PIN baru dan memulihkan data… (beberapa detik per staf)');
     try {
       await applyCloudRestore(preview, pins);

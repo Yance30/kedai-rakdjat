@@ -1,3 +1,4 @@
+import { askConfirm } from '../components/Dialog';
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
@@ -7,6 +8,7 @@ import CloudAccess from '../components/CloudAccess';
 import CloudRestore from '../components/CloudRestore';
 import Diagnostics from '../components/Diagnostics';
 import StaffManager from '../components/StaffManager';
+import TableManager from '../components/TableManager';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
@@ -125,7 +127,7 @@ export default function Settings({ staff }: { staff: Staff }) {
       const backup = parseBackup(await file.text());
       const weak = legacyPinStaff(backup);
       const weakNote = weak.length ? `\n\nPIN ${weak.join(', ')} memakai format lama yang lemah dan wajib diganti saat login berikutnya. Simpan file backup ini di tempat aman.` : '';
-      if (!confirm(`File valid: ${backup.data.orders.length} pesanan. Data akan diganti dan salinan pemulihan disimpan.${weakNote}\n\nLanjutkan?`)) return;
+      if (!(await askConfirm(`File valid: ${backup.data.orders.length} pesanan. Data akan diganti dan salinan pemulihan disimpan.${weakNote}`, { title: 'Pulihkan backup?', confirmLabel: 'Pulihkan', danger: true }))) return;
       await restoreBackup(backup);
       window.location.reload();
     } catch (e) { setMsg((e as Error).message); }
@@ -154,6 +156,7 @@ export default function Settings({ staff }: { staff: Staff }) {
       {isOwner && (
         <>
           <StaffManager actor={staff} />
+          <TableManager actor={staff} />
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-4">Manajemen Menu</h2>
             <div className="grid md:grid-cols-2 gap-3 mb-4">
@@ -225,7 +228,7 @@ export default function Settings({ staff }: { staff: Staff }) {
                     Edit
                   </button>
                   <button
-                    onClick={() => { if (confirm(`Nonaktifkan menu "${p.name}"?`)) db.products.update(p.id!, { active: 0 }); }}
+                    onClick={async () => { if (await askConfirm(`Menu "${p.name}" tidak akan tampil di kasir.`, { title: 'Nonaktifkan menu?', confirmLabel: 'Nonaktifkan', danger: true })) await db.products.update(p.id!, { active: 0 }); }}
                     className="text-xs px-2 py-1 rounded-full bg-red-50 text-primary-bright"
                   >
                     Arsipkan
@@ -290,7 +293,7 @@ export default function Settings({ staff }: { staff: Staff }) {
           </section>
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-2">Koneksi Cloud (Supabase)</h2>
-            {get('sync_paused') === 'true' && <div className="p-3 bg-amber-50 mb-3"><p>Sync dijeda setelah restore. Periksa data sebelum mengirim perubahan ke cloud.</p><button className="underline" onClick={async () => { if (confirm('Kirim hasil restore ke cloud? Data cloud perangkat ini akan mengikuti data tablet.')) { await put('sync_paused', 'false'); await syncNow(); } }}>Aktifkan kembali sync</button></div>}
+            {get('sync_paused') === 'true' && <div className="p-3 bg-amber-50 mb-3"><p>Sync dijeda setelah restore. Periksa data sebelum mengirim perubahan ke cloud.</p><button className="underline" onClick={async () => { if (await askConfirm('Data cloud perangkat ini akan mengikuti data tablet.', { title: 'Kirim hasil restore ke cloud?', confirmLabel: 'Kirim' })) { await put('sync_paused', 'false'); await syncNow(); } }}>Aktifkan kembali sync</button></div>}
             {get('sync_error') && <p role="alert" className="text-sm mb-3">{get('sync_error')}</p>}
             <p className="text-xs text-gray-500 mb-4">
               Tablet tetap jalan offline. Isi URL & anon key proyek Supabase untuk mengaktifkan sync, Dashboard Owner, dan KDS dapur.
