@@ -10,6 +10,7 @@ interface KdsOrder {
   local_id: number;
   created_at: number;
   table_local_id: number | null;
+  order_type?: 'dine_in' | 'takeaway';
   kds_status: string;
   /** Paid part of a split bill: its items belong to the parent's kitchen ticket. */
   split_from_local_id?: number | null;
@@ -117,7 +118,7 @@ export default function Kds({ device }: { device: string }) {
     for (const i of items) if ((parentOf.get(i.order_local_id) ?? i.order_local_id) === id) merged.set(i.name, (merged.get(i.name) ?? 0) + i.qty);
     return [...merged].map(([name, qty]) => ({ name, qty }));
   };
-  const tableName = (id: number | null) => tables.find((t) => t.local_id === id)?.name ?? 'Takeaway';
+  const orderLabel = (o: KdsOrder) => tables.find((t) => t.local_id === o.table_local_id)?.name ?? (o.order_type === 'takeaway' ? 'Takeaway' : 'Dine-in');
 
   return (
     <div className="h-full overflow-y-auto p-6">
@@ -148,7 +149,7 @@ export default function Kds({ device }: { device: string }) {
                   return (
                   <div key={`${o.device_id}-${o.local_id}`} className={`bg-white rounded-lg border p-3 ${late ? 'kr-urgent border-primary-bright/50' : 'border-gray-200'}`}>
                     <div className="flex justify-between items-center mb-2">
-                      <span className="font-bold">#{o.local_id} · {tableName(o.table_local_id)}</span>
+                      <span className="font-bold">#{o.local_id} · {orderLabel(o)}</span>
                       <span className={`text-xs ${late ? 'text-primary-bright font-semibold' : 'text-gray-500'}`}>{elapsed(o.created_at, now)}</span>
                     </div>
                     <ul className="text-sm space-y-0.5 mb-3">

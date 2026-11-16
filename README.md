@@ -101,7 +101,7 @@ Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of th
 
 ```
 src/
-├── screens/          Login, Cashier, Meja, Report (Keuangan), History, Sales, Menu,
+├── screens/          Login, Cashier, Report (Keuangan), History, Sales, Menu,
 │                     Expenses, Inventory, OwnerDashboard, Cloud, Kds, Settings
 ├── components/       SVG charts, cloud login, cloud restore, diagnostics, setup guide
 ├── db.ts             Dexie schema and seeds

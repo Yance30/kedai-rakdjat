@@ -191,41 +191,7 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   await page.screenshot({path:'test-results/kasir-portrait.png',animations:'disabled'});
   expect(errors).toEqual([]);
 });
-test('pisah bill: tamu membayar sebagian item, sisa tetap di meja lalu dilunasi', async ({ page }) => {
-  const errors: string[] = [];
-  page.on('pageerror', e => errors.push(e.message));
-  await page.goto('/');
-  await login(page, '1234');
-  await page.getByLabel('PIN baru', { exact: true }).fill('987654');
-  await page.getByLabel('Ulangi PIN', { exact: true }).fill('987654');
-  await page.getByRole('button', { name: 'Simpan PIN & masuk' }).click();
-  await page.getByRole('button', { name: 'Meja', exact: true }).click();
-  await page.getByRole('button', { name: 'Buka Meja' }).first().click();
-  const add = page.getByRole('button', { name: '+ Tambah', exact: true });
-  await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Espresso, 1× Tubruk
-  await expect(page.getByText('Simpan & kirim ke dapur dulu untuk memisah bill.')).toBeHidden(); // no saved order yet
-  await page.getByRole('button', { name: 'Simpan & ke Dapur' }).click();
-  await page.getByRole('button', { name: 'Lanjut / Bayar' }).click();
-  await page.getByRole('button', { name: 'Pisah Bill' }).click();
-  await page.getByLabel('Dibayar terpisah: Espresso').getByRole('button', { name: '+' }).click();
-  await page.getByRole('button', { name: 'Bayar Item Terpilih' }).click();
-  await expect(page.getByText('Rp 11.000').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Uang Pas' }).click();
-  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
-  await expect(page.getByText('Bill terpisah lunas.')).toBeVisible();
-  await page.getByRole('button', { name: 'Lanjutkan Sisa Pesanan' }).click();
-  expect(await counts(page)).toEqual({ orders: 2, payments: 1, audit: 1 });
-  await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
-  await expect(page.getByText('Rp 19.800').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Uang Pas' }).click();
-  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
-  await page.getByRole('button', { name: 'Kembali ke Denah Meja' }).click();
-  await expect(page.getByRole('button', { name: 'Selesai Bersih' })).toBeVisible();
-  expect(await counts(page)).toEqual({ orders: 2, payments: 2, audit: 2 });
-  expect(errors).toEqual([]);
-});
-
-test('dialog aplikasi, papan angka uang diterima dan kelola meja', async ({ page }) => {
+test('dialog aplikasi dan papan angka uang diterima', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
   const errors: string[] = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -251,17 +217,5 @@ test('dialog aplikasi, papan angka uang diterima dan kelola meja', async ({ page
   await expect(page.getByText('Pembayaran Berhasil', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Transaksi Baru' }).click();
 
-  // Owner adds and renames a table; it appears on the floor plan.
-  await page.getByRole('button', { name: 'Pengaturan', exact: true }).click();
-  await page.getByLabel('Nama meja baru').fill('Teras 1');
-  await page.getByRole('button', { name: 'Tambah Meja' }).click();
-  await expect(page.getByText('Meja ditambahkan.')).toBeVisible();
-  await page.getByRole('button', { name: 'Ganti nama meja Teras 1' }).click();
-  const rename = page.getByRole('dialog', { name: 'Ganti nama Teras 1' });
-  await rename.getByRole('textbox').fill('Teras VIP');
-  await rename.getByRole('button', { name: 'Simpan' }).click();
-  await expect(page.getByText('Nama meja diperbarui.')).toBeVisible();
-  await page.getByRole('button', { name: 'Meja', exact: true }).click();
-  await expect(page.getByText('Teras VIP', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });

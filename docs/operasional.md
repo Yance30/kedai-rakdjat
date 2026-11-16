@@ -36,7 +36,7 @@ Perubahan menu, pengeluaran, resep dan stok opname memerlukan login cloud owner 
 
 ## Pisah bill
 
-Untuk meja yang tamunya membayar sendiri-sendiri: simpan pesanan ke dapur, buka meja dari denah, lalu ketuk **Pisah Bill**. Pilih item (dan jumlahnya) yang dibayar tamu tersebut, lalu **Bayar Item Terpilih**. Bagian itu menjadi pesanan lunas tersendiri dengan struk dan pembayarannya sendiri. Sisa item tetap terbuka di meja yang sama. Service charge, pajak dan diskon (dengan PIN owner) dihitung per bagian. Bagian terakhir dibayar dengan pembayaran biasa, lalu meja berpindah ke status bersih-bersih. Di KDS, item semua bagian tetap tampil dalam satu tiket meja. Fitur ini memerlukan migrasi `0006_split_bill.sql`.
+Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibuat dan langsung dibayar dari layar **Kasir**, lalu tiket masuk ke dapur/KDS. Jika tablet masih menyimpan pesanan meja lama dari versi sebelumnya yang belum dibayar, muncul pita kuning di atas Kasir; ketuk **Selesaikan** untuk melunasinya (Pisah Bill masih tersedia untuk pesanan lama itu). Shift tidak bisa ditutup selama pesanan tersebut belum lunas.
 
 ## Salinan otomatis dan pemulihan dari cloud
 

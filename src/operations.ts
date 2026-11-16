@@ -53,23 +53,3 @@ export async function recordStock(ingredientId:number, value:number, kind:'waste
     await db.stockMovements.add({ingredientId,kind,qty,unitCost:row.unitCost,reason:reason.trim(),actorId,createdAt:Date.now()});
   });
 }
-
-/**
- * Add a dining table, or rename one (pass id). Tables are never deleted: cloud sync is upsert-only,
- * so a deleted row would linger in the owner dashboard and KDS with no way to remove it.
- */
-export async function saveTable(input: { id?: number; name: string }, actorId: number) {
-  const name = input.name.trim();
-  if (!name || name.length > 20) throw new Error('Nama meja wajib diisi, maksimal 20 karakter.');
-  return db.transaction('rw', [db.meja, db.staff], async () => {
-    await owner(actorId);
-    const all = await db.meja.toArray();
-    if (all.some(t => t.id !== input.id && t.name.trim().toLowerCase() === name.toLowerCase())) throw new Error(`Meja "${name}" sudah ada.`);
-    if (input.id) {
-      if (!all.some(t => t.id === input.id)) throw new Error('Meja tidak ditemukan.');
-      await db.meja.update(input.id, { name });
-      return input.id;
-    }
-    return db.meja.add({ name, status: 'available' });
-  });
-}

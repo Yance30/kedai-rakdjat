@@ -8,7 +8,6 @@ import CloudAccess from '../components/CloudAccess';
 import CloudRestore from '../components/CloudRestore';
 import Diagnostics from '../components/Diagnostics';
 import StaffManager from '../components/StaffManager';
-import TableManager from '../components/TableManager';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
@@ -156,7 +155,6 @@ export default function Settings({ staff }: { staff: Staff }) {
       {isOwner && (
         <>
           <StaffManager actor={staff} />
-          <TableManager actor={staff} />
           <section className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
             <h2 className="font-semibold mb-4">Manajemen Menu</h2>
             <div className="grid md:grid-cols-2 gap-3 mb-4">

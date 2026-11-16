@@ -13,7 +13,6 @@ const Inventory = lazy(() => import('./screens/Inventory'));
 import type { Shift, Staff } from './types';
 import Login from './screens/Login';
 import Cashier from './screens/Cashier';
-import Meja from './screens/Meja';
 import Report from './screens/Report';
 import History from './screens/History';
 const Settings = lazy(() => import('./screens/Settings'));
@@ -32,7 +31,6 @@ async function ensureShift(staffId: number): Promise<Shift> {
 
 const ICONS: Record<string, string> = {
   kasir: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z M8 7h8 M8 11h8 M8 15h5',
-  meja: 'M3 3h7v7H3Z M14 3h7v7h-7Z M3 14h7v7H3Z M14 14h7v7h-7Z',
   keuangan: 'M21 12V7H5a2 2 0 0 1 0-4h14v4 M3 5v14a2 2 0 0 0 2 2h16v-5 M18 12a2 2 0 0 0 0 4h4v-4Z',
   riwayat: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M12 6v6l4 2',
   kds: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3 2.5.5 5 2.5 5 6a5 5 0 1 1-10 0c0-1.5.5-3 2-4.5.5 1.5 1 2 1.5 2Z M12 2c1 3 2.5 3.5 4 5 1.5 1.5 3 3.5 3 7',
@@ -79,8 +77,11 @@ export default function App() {
   }, []);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
-  const [tab, setTab] = useState<'kasir' | 'meja' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
+  const [tab, setTab] = useState<'kasir' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
+  // Pesanan meja lama (dibuat sebelum fitur meja dihapus) yang belum dibayar tetap bisa dilunasi,
+  // karena tutup shift menolak selama masih ada pesanan terbuka.
   const [activeTable, setActiveTable] = useState<number | null>(null);
+  const legacyOpen = useLiveQuery(() => db.orders.where('status').equals('open').toArray(), []) ?? [];
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
 
@@ -134,8 +135,7 @@ export default function App() {
   }
 
   const nav: { key: typeof tab; label: string; icon: string; ownerOnly?: boolean; active?: boolean }[] = [
-    { key: 'kasir', label: 'Kasir', icon: 'kasir', active: tab === 'kasir' && !activeTable },
-    { key: 'meja', label: 'Meja', icon: 'meja', active: tab === 'meja' || (tab === 'kasir' && !!activeTable) },
+    { key: 'kasir', label: 'Kasir', icon: 'kasir' },
     { key: 'laporan', label: 'Keuangan', icon: 'keuangan' },
     { key: 'riwayat', label: 'Riwayat', icon: 'riwayat' },
     { key: 'penjualan', label: 'Laporan Penjualan', icon: 'penjualan', ownerOnly: true },
@@ -204,14 +204,25 @@ export default function App() {
       <main className="flex-1 min-w-0">
         <div key={tab + (activeTable ?? '')} className="h-full kr-page">
           {tab === 'kasir' ? (
-            <Cashier
-              shift={shift}
-              staff={staff}
-              tableId={activeTable}
-              onTableDone={() => { setActiveTable(null); setTab('meja'); }}
-            />
-          ) : tab === 'meja' ? (
-            <Meja onOpen={(id) => { setActiveTable(id); setTab('kasir'); }} />
+            <div className="h-full flex flex-col">
+              {!activeTable && legacyOpen.some(o => o.tableId) && (
+                <div role="status" className="shrink-0 bg-amber-50 border-b border-amber-200 px-6 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-2">
+                  <span>Ada pesanan tersimpan yang belum dibayar:</span>
+                  {legacyOpen.filter(o => o.tableId).map(o => (
+                    <button key={o.id} onClick={() => setActiveTable(o.tableId!)} className="underline font-semibold">#{o.id} · Selesaikan</button>
+                  ))}
+                </div>
+              )}
+              <div className="flex-1 min-h-0">
+                <Cashier
+                  key={activeTable ?? 'counter'}
+                  shift={shift}
+                  staff={staff}
+                  tableId={activeTable}
+                  onTableDone={() => setActiveTable(null)}
+                />
+              </div>
+            </div>
           ) : tab === 'laporan' ? (
             <Report shift={shift} actorId={staff.id!} onClosed={() => { setShift(null); setStaff(null); }} />
           ) : tab === 'riwayat' ? (

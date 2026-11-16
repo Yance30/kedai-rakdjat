@@ -346,9 +346,9 @@ export default function Cashier({
         <p role="status" className="text-xs text-emerald-700 mb-3">{draft.status}</p>
         {draft.error && <p role="alert" className="text-sm text-red-700 mb-2">{draft.error} <button className="underline" onClick={() => location.reload()}>Muat ulang</button></p>}
         <div className="flex items-center justify-between mb-1">
-          <div className="font-display font-semibold text-lg">{tableId ? `Meja ${table?.name ?? ''}` : 'Pesanan Baru'}</div>
+          <div className="font-display font-semibold text-lg">{tableId ? `Pesanan Tersimpan${table?.name ? ` · ${table.name}` : ''}` : 'Pesanan Baru'}</div>
           {tableId && (
-            <button onClick={() => onTableDone?.()} className="text-xs text-gray-500 hover:text-primary">← Denah Meja</button>
+            <button onClick={() => onTableDone?.()} className="text-xs text-gray-500 hover:text-primary">← Kembali ke Kasir</button>
           )}
         </div>
         {!tableId && (
@@ -371,7 +371,7 @@ export default function Cashier({
             </button>
           ) : !savedMatches && <p className="text-xs text-gray-500 mb-3">Simpan & kirim ke dapur dulu untuk memisah bill.</p>
         )}
-        {splitting && <p className="text-xs text-gray-600 mb-2">Pilih item yang dibayar tamu ini. Sisanya tetap di meja.</p>}
+        {splitting && <p className="text-xs text-gray-600 mb-2">Pilih item yang dibayar tamu ini. Sisanya tetap tersimpan.</p>}
         <div className="flex-1 overflow-y-auto space-y-3">
           {lines.length > 0 && !splitting && <button disabled={busy || draft.saving} onClick={async () => { if (await askConfirm('Pesanan yang sudah dikirim ke dapur tetap tersimpan.', { title: 'Kosongkan keranjang?', confirmLabel: 'Kosongkan', danger: true })) draft.update([]); }} className="text-xs underline text-gray-500 mb-2">Kosongkan keranjang</button>}
           {lines.length === 0 && <p className="text-sm text-gray-400">Belum ada item.</p>}
@@ -381,7 +381,7 @@ export default function Cashier({
             <div key={l.product.id} className="kr-line-in flex items-center gap-2">
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{l.product.name}</div>
-                <div className="text-xs text-gray-500">{rupiah(l.product.price)}{splitting && ` · ${l.qty} di meja`}</div>
+                <div className="text-xs text-gray-500">{rupiah(l.product.price)}{splitting && ` · ${l.qty} tersimpan`}</div>
               </div>
               {splitting ? (
                 <div className="flex items-center gap-2" aria-label={`Dibayar terpisah: ${l.product.name}`}>
@@ -465,9 +465,9 @@ export default function Cashier({
             {success.method === 'cash' && (
               <div className="text-sm text-gray-600 mb-4">Kembalian: <span className="font-semibold">{rupiah(success.change)}</span></div>
             )}
-            {success.split && <p className="text-sm text-gray-500 mb-2">Bill terpisah lunas. Sisa pesanan tetap terbuka di meja ini.</p>}
+            {success.split && <p className="text-sm text-gray-500 mb-2">Bill terpisah lunas. Sisa pesanan tetap terbuka.</p>}
             <button onClick={() => { const split = success.split; setSuccess(null); if (tableId && !split) onTableDone?.(); }} className="w-full h-12 rounded-lg bg-primary text-white font-semibold mt-2">
-              {success.split ? 'Lanjutkan Sisa Pesanan' : tableId ? 'Kembali ke Denah Meja' : 'Transaksi Baru'}
+              {success.split ? 'Lanjutkan Sisa Pesanan' : tableId ? 'Kembali ke Kasir' : 'Transaksi Baru'}
             </button>
           </div>
         </div>
