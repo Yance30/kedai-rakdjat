@@ -3,7 +3,12 @@ import { db } from './db';
 import { draftKey, recoverDraft, saveDraft } from './drafts';
 import type { CartDraft, Product } from './types';
 
-export function useCart(shiftId: number, staffId: number, tableId?: number | null) {
+/**
+ * The cashier's cart, saved to the tablet on every change. `legacyTableId` opens the cart of a table
+ * order saved by an earlier version (before tables were removed) so it can still be paid.
+ */
+export function useCart(shiftId: number, staffId: number, legacyTableId?: number | null) {
+  const tableId = legacyTableId;
   const [cart, setCart] = useState<CartDraft | null>(null);
   const [status, setStatus] = useState('Memuat keranjang…');
   const [error, setError] = useState('');
@@ -33,16 +38,22 @@ export function useCart(shiftId: number, staffId: number, tableId?: number | nul
     return () => window.removeEventListener('beforeunload', warn);
   }, [saving]);
 
-  function update(lines: { product: Product; qty: number }[], orderType = current.current?.orderType ?? 'dine_in') {
+  function write(changes: Partial<Pick<CartDraft, 'lines' | 'orderType' | 'customerName'>>) {
     const old = current.current;
     if (!old || failed.current) return;
-    const next = { ...old, lines, orderType, revision: old.revision + 1, updatedAt: Date.now() };
+    const next = { ...old, ...changes, revision: old.revision + 1, updatedAt: Date.now() };
     current.current = next; setCart(next); setSaving(true); setStatus('Menyimpan keranjang…');
     queue.current = queue.current.then(async () => {
       if (failed.current) return;
       await saveDraft(next, old.revision);
       if (current.current?.revision === next.revision) { setSaving(false); setStatus('Keranjang tersimpan di tablet'); }
     }).catch(e => { failed.current = true; setSaving(false); setError((e as Error).message); setStatus('Keranjang belum tersimpan'); });
+  }
+  function update(lines: { product: Product; qty: number }[], orderType = current.current?.orderType ?? 'dine_in') {
+    write({ lines, orderType });
+  }
+  function setCustomerName(customerName: string) {
+    write({ customerName });
   }
   async function flush() {
     await queue.current;
@@ -51,14 +62,12 @@ export function useCart(shiftId: number, staffId: number, tableId?: number | nul
   }
   function completed() {
     if (!current.current) return;
-    const next: CartDraft = { ...current.current, lines: [], orderId: null, requestId: crypto.randomUUID(), revision: 0, updatedAt: Date.now() };
+    const next: CartDraft = { ...current.current, lines: [], orderId: null, requestId: crypto.randomUUID(), revision: 0, updatedAt: Date.now(), customerName: undefined, queueNo: undefined };
     current.current = next; setCart(next); setStatus('Transaksi tersimpan');
   }
-  /** Shows lines that were already saved by a transaction (e.g. what is left after a split bill) without writing a draft. */
-  function replaceSaved(lines: { product: Product; qty: number }[]) {
-    if (!current.current) return;
-    const next: CartDraft = { ...current.current, lines, requestId: crypto.randomUUID(), revision: 0, updatedAt: Date.now() };
-    current.current = next; setCart(next); setStatus('Sisa pesanan meja');
+  /** Shows the unpaid rest of a split payment, which the payment transaction already saved as the draft. */
+  function continueWith(next: CartDraft) {
+    current.current = next; setCart(next); setStatus('Sisa pesanan belum dibayar');
   }
-  return { cart, update, flush, completed, replaceSaved, status, error, saving };
+  return { cart, update, setCustomerName, flush, completed, continueWith, status, error, saving };
 }

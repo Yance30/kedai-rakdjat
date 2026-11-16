@@ -78,10 +78,16 @@ export default function App() {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
   const [tab, setTab] = useState<'kasir' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
-  // Pesanan meja lama (dibuat sebelum fitur meja dihapus) yang belum dibayar tetap bisa dilunasi,
-  // karena tutup shift menolak selama masih ada pesanan terbuka.
+  // Pesanan/keranjang meja lama (dibuat sebelum fitur meja dihapus) tetap bisa dilunasi,
+  // karena tutup shift menolak selama masih ada pesanan terbuka atau keranjang berisi.
   const [activeTable, setActiveTable] = useState<number | null>(null);
-  const legacyOpen = useLiveQuery(() => db.orders.where('status').equals('open').toArray(), []) ?? [];
+  const legacyTables = useLiveQuery(async () => {
+    const open = await db.orders.where('status').equals('open').filter(o => !!o.tableId).toArray();
+    const carts = await db.drafts.filter(d => !!d.tableId && d.shiftId === shift?.id && d.lines.length > 0).toArray();
+    const ids = [...new Set([...open.map(o => o.tableId!), ...carts.map(d => d.tableId!)])];
+    const names = new Map((await db.meja.bulkGet(ids)).map((t, i) => [ids[i], t?.name ?? `#${ids[i]}`]));
+    return ids.map(id => ({ id, name: names.get(id)! }));
+  }, [shift?.id]) ?? [];
   const [ready, setReady] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
 
@@ -205,11 +211,11 @@ export default function App() {
         <div key={tab + (activeTable ?? '')} className="h-full kr-page">
           {tab === 'kasir' ? (
             <div className="h-full flex flex-col">
-              {!activeTable && legacyOpen.some(o => o.tableId) && (
+              {!activeTable && legacyTables.length > 0 && (
                 <div role="status" className="shrink-0 bg-amber-50 border-b border-amber-200 px-6 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-2">
-                  <span>Ada pesanan tersimpan yang belum dibayar:</span>
-                  {legacyOpen.filter(o => o.tableId).map(o => (
-                    <button key={o.id} onClick={() => setActiveTable(o.tableId!)} className="underline font-semibold">#{o.id} · Selesaikan</button>
+                  <span>Pesanan dari versi lama belum dibayar:</span>
+                  {legacyTables.map(t => (
+                    <button key={t.id} onClick={() => setActiveTable(t.id)} className="underline font-semibold">{t.name} · Selesaikan</button>
                   ))}
                 </div>
               )}
@@ -218,8 +224,8 @@ export default function App() {
                   key={activeTable ?? 'counter'}
                   shift={shift}
                   staff={staff}
-                  tableId={activeTable}
-                  onTableDone={() => setActiveTable(null)}
+                  legacyTableId={activeTable}
+                  onLegacyDone={() => setActiveTable(null)}
                 />
               </div>
             </div>

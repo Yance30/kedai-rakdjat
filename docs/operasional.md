@@ -2,7 +2,7 @@
 
 ## Migrasi cloud
 
-Aplikasi terbaru memerlukan schema **6**. Untuk proyek versi awal yang sudah memiliki tabel POS, jalankan **0002_secure_sync.sql → 0003_inventory_reporting.sql → 0004_operations.sql → 0005_drawer_expenses.sql → 0006_split_bill.sql** melalui Supabase SQL Editor. Tunggu setiap file berhasil sebelum melanjutkan. Jangan mengulang migrasi yang sudah sukses. Proyek baru menjalankan 0001 terlebih dahulu. Semua file tersedia di Pengaturan → Pemeriksaan Kesiapan Kedai. Unduhan file tidak menerapkan migrasi.
+Aplikasi terbaru memerlukan schema **7**. Untuk proyek versi awal yang sudah memiliki tabel POS, jalankan **0002_secure_sync.sql → 0003_inventory_reporting.sql → 0004_operations.sql → 0005_drawer_expenses.sql → 0006_split_bill.sql → 0007_queue_numbers.sql** melalui Supabase SQL Editor. Tunggu setiap file berhasil sebelum melanjutkan. Jangan mengulang migrasi yang sudah sukses. Proyek baru menjalankan 0001 terlebih dahulu. Semua file tersedia di Pengaturan → Pemeriksaan Kesiapan Kedai. Unduhan file tidak menerapkan migrasi.
 
 Setelah migrasi, ikuti [pengaturan akun dan membership](production-setup.md), login cloud owner dan jalankan pemeriksaan kesiapan. Pemeriksaan harus menunjukkan schema 6 dan akses anonim ditolak. Pastikan tablet berisi data sumber yang benar sebelum sinkronisasi awal. Pengujian SQL lokal tidak membuktikan penerapan di proyek cloud.
 
@@ -36,7 +36,13 @@ Perubahan menu, pengeluaran, resep dan stok opname memerlukan login cloud owner 
 
 ## Pisah bill
 
-Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibuat dan langsung dibayar dari layar **Kasir**, lalu tiket masuk ke dapur/KDS. Jika tablet masih menyimpan pesanan meja lama dari versi sebelumnya yang belum dibayar, muncul pita kuning di atas Kasir; ketuk **Selesaikan** untuk melunasinya (Pisah Bill masih tersedia untuk pesanan lama itu). Shift tidak bisa ditutup selama pesanan tersebut belum lunas.
+Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibuat dan langsung dibayar dari layar **Kasir**, lalu tiket masuk ke dapur/KDS.
+
+**Nomor antrean dan nama pelanggan.** Setiap pesanan mendapat nomor antrean otomatis yang dimulai lagi dari 1 setiap shift. Nama pelanggan boleh diisi (opsional, maksimal 30 karakter). Nomor dan nama tampil besar di layar sukses, tiket dapur, struk dan KDS, sehingga pelayan bisa memanggil atau mengantar pesanan.
+
+**Pisah Bayar.** Untuk rombongan yang membayar sendiri-sendiri: masukkan semua pesanan, ketuk **Pisah Bayar**, pilih item (dan jumlahnya) yang dibayar tamu pertama, lalu **Bayar Item Terpilih**. Bagian itu menjadi pesanan lunas tersendiri dengan struk dan tiket dapurnya sendiri. Sisa item tetap di keranjang dengan nomor antrean dan nama yang sama (tetap aman walau aplikasi ditutup), lalu dibayar dengan cara yang sama. Service charge, pajak dan diskon (dengan PIN owner) dihitung per bagian. Shift tidak bisa ditutup selama sisa keranjang belum dibayar atau dikosongkan.
+
+**Pesanan meja dari versi lama.** Jika tablet masih menyimpan pesanan meja dari versi sebelumnya yang belum dibayar, muncul pita kuning di atas Kasir; ketuk **Selesaikan** untuk melunasinya. Shift tidak bisa ditutup selama pesanan tersebut belum lunas.
 
 ## Salinan otomatis dan pemulihan dari cloud
 

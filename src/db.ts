@@ -10,6 +10,7 @@ export function hashPin(pin: string): string {
   return h.toString(16);
 }
 
+/** Only for devices upgrading from before v3; new installs have no tables (orders go through the cashier). */
 function seedTables(): DiningTable[] {
   return Array.from({ length: 8 }, (_, i) => ({ name: `T-0${i + 1}`, status: 'available' as const }));
 }
@@ -85,7 +86,6 @@ export class PosDB extends Dexie {
         { name: 'Kasir', role: 'kasir', pinHash: hashPin('1111') },
       ]);
       t.products.bulkAdd(MENU_PRODUCTS);
-      t.meja.bulkAdd(seedTables());
     });
   }
 }

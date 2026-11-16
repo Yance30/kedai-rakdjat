@@ -44,6 +44,7 @@ export function cloudRowsToBackup(device: string, t: Record<string, Row[]>, pinH
       tableId: num(r.table_local_id), cashierId: num(r.cashier_local_id), paidAt: num(r.paid_at),
       costTotal: num(r.cost_total), costComplete: opt<boolean>(r.cost_complete), stockReturned: opt<boolean>(r.stock_returned),
       discount: num(r.discount), discountReason: opt<string>(r.discount_reason), discountApproverId: num(r.discount_approver_local_id), splitFrom: num(r.split_from_local_id),
+      queueNo: num(r.queue_no), customerName: opt<string>(r.customer_name),
     })),
     orderItems: t.order_items.map(r => ({ id: Number(r.local_id), orderId: Number(r.order_local_id), productId: Number(r.product_local_id), name: String(r.name), qty: Number(r.qty), price: Number(r.price), costTotal: num(r.cost_total) })),
     payments: t.payments.map(r => ({ id: Number(r.local_id), orderId: Number(r.order_local_id), shiftId: Number(r.shift_local_id), method: r.method as 'cash', amount: Number(r.amount), tendered: Number(r.tendered), change: Number(r.change), createdAt: Number(r.created_at), requestId: opt<string>(r.request_id) })),

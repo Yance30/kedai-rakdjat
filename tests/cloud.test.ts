@@ -29,6 +29,7 @@ beforeAll(async () => {
   await pg.exec(readFileSync('supabase/migrations/0004_operations.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0005_drawer_expenses.sql', 'utf8'));
   await pg.exec(readFileSync('supabase/migrations/0006_split_bill.sql', 'utf8'));
+  await pg.exec(readFileSync('supabase/migrations/0007_queue_numbers.sql', 'utf8'));
   await pg.exec(`insert into public.cloud_memberships values ('${owner}','tablet-a','owner'),('${cashier}','tablet-a','cashier'),('${kitchen}','tablet-a','kitchen'),('${outsider}','tablet-b','owner')`);
 });
 afterAll(async () => { await pg.close(); });
@@ -100,7 +101,7 @@ describe('migrasi SQL dan akses cloud', () => {
   });
   it('schema stok aktif, owner dapat membuat bahan, kasir memotong stok secara atomik dan idempoten', async () => {
     await login(owner);
-    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(6);
+    expect((await pg.query<{pos_schema_version:number}>('select public.pos_schema_version()')).rows[0].pos_schema_version).toBe(7);
     const ingredient=row('ingredients',{name:'Kopi',unit:'g',stock:1000,minimum:100,unit_cost:100,active:1});
     await push([ingredient,row('recipes',{ingredients:[{ingredientId:1,qty:20}]}),row('stock_movements',{ingredient_local_id:1,order_local_id:null,kind:'opening',qty:1000,unit_cost:100,reason:'Stok awal',actor_local_id:1,created_at:1000})]);
     await login(cashier);
@@ -128,4 +129,11 @@ it('bagian pisah bill tersinkron dengan rujukan ke pesanan meja', async () => {
   await push([row('orders', { ...order.row, local_id: 50 }), row('orders', { ...order.row, local_id: 51, status: 'paid', split_from_local_id: 50 })]);
   expect((await pg.query<{ split_from_local_id: number }>('select split_from_local_id from public.orders where local_id=51')).rows[0].split_from_local_id).toBe(50);
   await expect(push([row('orders', { ...order.row, local_id: 52, split_from_local_id: 52 })])).rejects.toThrow();
+});
+it('nomor antrean dan nama pelanggan tersinkron; nilai tidak valid ditolak', async () => {
+  await login(owner);
+  await push([row('orders', { ...order.row, local_id: 60, status: 'paid', queue_no: 12, customer_name: 'Budi' })]);
+  expect((await pg.query<{ queue_no: number; customer_name: string }>('select queue_no, customer_name from public.orders where local_id=60')).rows[0]).toEqual({ queue_no: 12, customer_name: 'Budi' });
+  await expect(push([row('orders', { ...order.row, local_id: 61, queue_no: 0 })])).rejects.toThrow();
+  await expect(push([row('orders', { ...order.row, local_id: 62, customer_name: 'x'.repeat(31) })])).rejects.toThrow();
 });

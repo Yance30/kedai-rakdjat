@@ -63,7 +63,7 @@ npm install
 ### 2. Set up Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), [`0004_operations.sql`](supabase/migrations/0004_operations.sql), [`0005_drawer_expenses.sql`](supabase/migrations/0005_drawer_expenses.sql), then [`0006_split_bill.sql`](supabase/migrations/0006_split_bill.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 6 before acknowledging sync.
+2. Run [`0001_init.sql`](supabase/migrations/0001_init.sql), [`0002_secure_sync.sql`](supabase/migrations/0002_secure_sync.sql), [`0003_inventory_reporting.sql`](supabase/migrations/0003_inventory_reporting.sql), [`0004_operations.sql`](supabase/migrations/0004_operations.sql), [`0005_drawer_expenses.sql`](supabase/migrations/0005_drawer_expenses.sql), [`0006_split_bill.sql`](supabase/migrations/0006_split_bill.sql), then [`0007_queue_numbers.sql`](supabase/migrations/0007_queue_numbers.sql) in the SQL Editor. Existing installations run only migrations not yet applied, in order. Follow [production setup](docs/production-setup.md) to provision accounts and device memberships before syncing. The app requires schema version 7 before acknowledging sync.
 3. Create a `.env` file in the project root:
 
 ```env
@@ -116,7 +116,7 @@ src/
 ├── printer.ts        ESC/POS builders + Web Bluetooth transport
 └── money.ts          integer-rupiah helpers
 supabase/
-└── migrations/       cloud schema 0001–0006, applied in order
+└── migrations/       cloud schema 0001–0007, applied in order
 ```
 
 ## Roadmap
@@ -129,6 +129,7 @@ supabase/
 - [x] Ingredients, recipes, stock movements and transaction cost snapshots
 - [x] Responsive tablet layout and browser/device diagnostics
 - [x] Split bill per item, restore from cloud, automatic local snapshots (production migration 0006 required)
+- [x] No table management: queue numbers, optional customer name, split payment at the counter (production migration 0007 required)
 
 ---
 

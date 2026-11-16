@@ -26,6 +26,7 @@ export async function snapshot(dev: string): Promise<Snapshot> {
       cashier_local_id: o.cashierId ?? null, paid_at: o.paidAt ?? null,
       cost_total: o.costTotal ?? null, cost_complete: o.costComplete ?? null, stock_returned: o.stockReturned ?? null,
       split_from_local_id: o.splitFrom ?? null,
+      queue_no: o.queueNo ?? null, customer_name: o.customerName ?? null,
     })));
     collect('order_items', orderItems.map((i) => ({
       device_id: dev, local_id: i.id, order_local_id: i.orderId, product_local_id: i.productId,

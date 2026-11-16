@@ -61,6 +61,7 @@ export function buildReceipt(o: Order, items: OrderItem[], pay: Payment, cashier
   line(b, '--------------------------------');
   b.push(0x1b, 0x61, 0x00);
   line(b, `Order #${o.id} ${o.orderType === 'dine_in' ? 'Dine-in' : 'Takeaway'}`);
+  if (o.queueNo || o.customerName) line(b, queueLabel(o));
   line(b, new Date(o.createdAt).toLocaleString('id-ID'));
   line(b, `Kasir: ${cashier}`);
   line(b, '--------------------------------');
@@ -83,44 +84,25 @@ export function buildReceipt(o: Order, items: OrderItem[], pay: Payment, cashier
   return new Uint8Array(b);
 }
 
-export function buildTicket(o: Order, items: OrderItem[], tableLabel?: string): Uint8Array {
+/** "Antrean 12 · Budi", or "Order #40" for orders from before queue numbers. */
+export function queueLabel(o: Pick<Order, 'id' | 'queueNo' | 'customerName'>) {
+  return [o.queueNo ? `Antrean ${o.queueNo}` : `Order #${o.id}`, o.customerName].filter(Boolean).join(' · ');
+}
+
+export function buildTicket(o: Order, items: OrderItem[]): Uint8Array {
   const b: number[] = [0x1b, 0x40, 0x1b, 0x61, 0x01, 0x1b, 0x45, 0x01];
-  line(b, `DAPUR - Order #${o.id}`);
-  b.push(0x1b, 0x45, 0x00);
-  if (tableLabel) line(b, tableLabel);
+  line(b, 'DAPUR');
+  b.push(0x1d, 0x21, 0x11);
+  line(b, o.queueNo ? `ANTREAN ${o.queueNo}` : `#${o.id}`);
+  b.push(0x1d, 0x21, 0x00, 0x1b, 0x45, 0x00);
+  if (o.customerName) line(b, o.customerName);
+  line(b, `Order #${o.id} ${o.orderType === 'dine_in' ? 'Dine-in' : 'Takeaway'}`);
   line(b, new Date(o.createdAt).toLocaleTimeString('id-ID'));
   line(b, '--------------------------------');
   b.push(0x1b, 0x61, 0x00);
   for (const it of items) {
     line(b, `${it.qty} x ${it.name}`);
   }
-  line(b, '');
-  b.push(0x1d, 0x56, 0x42, 0x00);
-  return new Uint8Array(b);
-}
-
-export function buildBill(o: Order, items: OrderItem[], cashier: string, tableLabel?: string): Uint8Array {
-  const b: number[] = [0x1b, 0x40, 0x1b, 0x61, 0x01];
-  line(b, 'KEDAI RAKDJAT');
-  line(b, 'BILL SEMENTARA');
-  line(b, '--------------------------------');
-  b.push(0x1b, 0x61, 0x00);
-  if (tableLabel) line(b, tableLabel);
-  line(b, new Date(o.createdAt).toLocaleString('id-ID'));
-  line(b, `Kasir: ${cashier}`);
-  line(b, '--------------------------------');
-  for (const it of items) {
-    line(b, it.name);
-    row(b, `  ${it.qty} x ${rupiah(it.price)}`, rupiah(it.qty * it.price));
-  }
-  line(b, '--------------------------------');
-  row(b, 'Subtotal', rupiah(o.subtotal));
-  if(o.discount) row(b, 'Diskon', '-'+rupiah(o.discount));
-  if (o.service) row(b, 'Service', rupiah(o.service));
-  row(b, 'Pajak 10%', rupiah(o.tax));
-  row(b, 'TOTAL', rupiah(o.total));
-  b.push(0x1b, 0x61, 0x01);
-  line(b, 'Belum termasuk pembayaran');
   line(b, '');
   b.push(0x1d, 0x56, 0x42, 0x00);
   return new Uint8Array(b);

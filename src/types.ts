@@ -61,8 +61,11 @@ export interface Order {
   discount?: number;
   discountReason?: string;
   discountApproverId?: number;
-  /** Set on a paid part of a split bill: the open table order it was taken from. */
+  /** Set on a paid part of a split bill: the open table order it was taken from (older versions only). */
   splitFrom?: number;
+  /** Queue number called out when the food is ready; restarts every shift. Parts paid separately share it. */
+  queueNo?: number;
+  customerName?: string;
 }
 
 export interface OrderItem {
@@ -110,6 +113,9 @@ export interface CartDraft {
   lines: { product: Product; qty: number }[];
   updatedAt: number;
   revision: number;
+  customerName?: string;
+  /** Set once part of this cart has been paid, so the rest gets the same queue number. */
+  queueNo?: number;
 }
 export interface Ingredient {
   id?: number;

@@ -219,3 +219,39 @@ test('dialog aplikasi dan papan angka uang diterima', async ({ page }) => {
 
   expect(errors).toEqual([]);
 });
+
+test('tanpa meja: nama pelanggan, nomor antrean dan pisah bayar dengan sisa yang bertahan setelah reload', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const errors: string[] = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await setupOwner(page);
+  await expect(page.getByRole('button', { name: 'Meja', exact: true })).toHaveCount(0);
+  const add = page.getByRole('button', { name: '+ Tambah', exact: true });
+  await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Espresso, 1× Tubruk
+  await page.getByLabel('Nama pelanggan').fill('Rombongan Budi');
+  await page.getByRole('button', { name: 'Pisah Bayar' }).click();
+  await page.getByLabel('Dibayar terpisah: Espresso').getByRole('button', { name: '+' }).click();
+  await page.getByRole('button', { name: 'Bayar Item Terpilih' }).click();
+  await expect(page.getByText('Rp 11.000').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Uang Pas' }).click();
+  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
+  await expect(page.getByText('Nomor antrean', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').or(page.locator('.kr-modal')).getByText('Rombongan Budi', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Lanjutkan Sisa Pesanan' }).click();
+  expect(await counts(page)).toEqual({ orders: 1, payments: 1, audit: 1 });
+
+  // The unpaid rest survives a reload with the same queue number and customer name.
+  await page.reload();
+  await login(page, '987654');
+  await expect(page.getByText('Antrean 1', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Nama pelanggan')).toHaveValue('Rombongan Budi');
+  await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
+  await expect(page.getByText('Rp 19.800').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Uang Pas' }).click();
+  await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
+  await expect(page.getByText('Nomor antrean', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Transaksi Baru' }).click();
+  await expect(page.getByLabel('Nama pelanggan')).toHaveValue('');
+  expect(await counts(page)).toEqual({ orders: 2, payments: 2, audit: 2 });
+  expect(errors).toEqual([]);
+});
