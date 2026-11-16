@@ -2,11 +2,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 
 // GitHub Pages serves the app under /<repo>/; local dev and tests keep the root path.
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   base: process.env.BASE_PATH || '/',
   plugins: [
+    // npm run dev:lan (mode "lan") serves a self-signed HTTPS certificate so tablets on the Wi-Fi can
+    // log in: PIN hashing (crypto.subtle), Bluetooth printing and offline mode need a secure context.
+    ...(mode === 'lan' ? [basicSsl()] : []),
     react(),
     tailwindcss(),
     VitePWA({
@@ -34,4 +38,4 @@ export default defineConfig({
     }),
   ],
   server: { host: true },
-});
+}));
