@@ -37,7 +37,7 @@ test('PIN demo, pembayaran offline dengan printer gagal, reload PWA, refund, tut
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
   await context.setOffline(true);
-  await page.getByRole('button', { name: '+ Tambah', exact: true }).first().click();
+  await page.getByRole('button', { name: / ke pesanan$/ }).first().click();
   await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
   await page.getByRole('button', { name: 'Uang Pas' }).click();
   await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).evaluate((button: HTMLButtonElement) => { button.click(); button.click(); });
@@ -93,7 +93,7 @@ test('operasional: kelola menu, diskon owner, pengeluaran dan backup',async({pag
   await page.screenshot({path:'test-results/kelola-menu.png',animations:'disabled'});
   await page.getByRole('button',{name:'Kasir',exact:true}).click();
   await page.getByPlaceholder('Cari menu...').fill('Kopi Operasional');
-  await page.getByRole('button',{name:'+ Tambah',exact:true}).click();
+  await page.getByRole('button',{ name: / ke pesanan$/ }).click();
   await expect(page.getByText('Keranjang tersimpan di tablet',{exact:true})).toBeVisible();
   await page.getByText('Diskon dengan PIN owner',{exact:true}).click();
   await page.getByLabel('Jenis diskon',{exact:true}).selectOption('persen');
@@ -148,8 +148,8 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   await page.getByRole('button',{name:'Simpan resep',exact:true}).click();
   await expect(page.getByText('Resep tersimpan untuk transaksi berikutnya.',{exact:true})).toBeVisible();
   await page.getByRole('button',{name:'Kasir',exact:true}).click();
-  await page.getByRole('button',{name:'+ Tambah',exact:true}).first().click();
-  await page.getByRole('button',{name:'+ Tambah',exact:true}).first().click();
+  await page.getByRole('button',{ name: / ke pesanan$/ }).first().click();
+  await page.getByRole('button',{ name: / ke pesanan$/ }).first().click();
   await expect(page.getByText('Keranjang tersimpan di tablet',{exact:true})).toBeVisible();
   await page.reload();await login(page,'987654');
   await expect(page.getByText('Keranjang dipulihkan dari tablet',{exact:true})).toBeVisible();
@@ -199,7 +199,7 @@ test('dialog aplikasi dan papan angka uang diterima', async ({ page }) => {
   await setupOwner(page);
 
   // Clearing the cart asks through the in-app dialog; cancelling keeps the items.
-  await page.getByRole('button', { name: '+ Tambah', exact: true }).first().click();
+  await page.getByRole('button', { name: / ke pesanan$/ }).first().click();
   await page.getByRole('button', { name: 'Kosongkan keranjang' }).click();
   const dialog = page.getByRole('dialog', { name: 'Kosongkan keranjang?' });
   await expect(dialog).toBeVisible();
@@ -226,13 +226,13 @@ test('tanpa meja: nama pelanggan, nomor antrean dan pisah bayar dengan sisa yang
   page.on('pageerror', e => errors.push(e.message));
   await setupOwner(page);
   await expect(page.getByRole('button', { name: 'Meja', exact: true })).toHaveCount(0);
-  const add = page.getByRole('button', { name: '+ Tambah', exact: true });
+  const add = page.getByRole('button', { name: / ke pesanan$/ });
   await add.nth(0).click(); await add.nth(0).click(); await add.nth(6).click(); // 2× Espresso, 1× Tubruk
   await page.getByLabel('Nama pelanggan').fill('Rombongan Budi');
   await page.getByRole('button', { name: 'Pisah Bayar' }).click();
   await page.getByLabel('Dibayar terpisah: Espresso').getByRole('button', { name: '+' }).click();
   await page.getByRole('button', { name: 'Bayar Item Terpilih' }).click();
-  await expect(page.getByText('Rp 11.000').first()).toBeVisible();
+  await expect(page.locator('.kr-modal').getByText('Rp 11.000')).toBeVisible();
   await page.getByRole('button', { name: 'Uang Pas' }).click();
   await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
   await expect(page.getByText('Nomor antrean', { exact: true })).toBeVisible();
@@ -246,7 +246,7 @@ test('tanpa meja: nama pelanggan, nomor antrean dan pisah bayar dengan sisa yang
   await expect(page.getByText('Antrean 1', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Nama pelanggan')).toHaveValue('Rombongan Budi');
   await page.getByRole('button', { name: 'Lanjut ke Pembayaran' }).click();
-  await expect(page.getByText('Rp 19.800').first()).toBeVisible();
+  await expect(page.locator('.kr-modal').getByText('Rp 19.800')).toBeVisible();
   await page.getByRole('button', { name: 'Uang Pas' }).click();
   await page.getByRole('button', { name: 'Konfirmasi Pembayaran' }).click();
   await expect(page.getByText('Nomor antrean', { exact: true })).toBeVisible();

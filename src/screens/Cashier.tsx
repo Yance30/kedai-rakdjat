@@ -32,6 +32,7 @@ export default function Cashier({ shift, staff, legacyTableId, onLegacyDone }: {
   const getSetting = (k: string) => settings.find((s) => s.key === k)?.value ?? '';
   const serviceRate = Number(getSetting('service_charge')) || 0;
   const working = useRef(false);
+  const basketRef = useRef<HTMLDivElement>(null);
   const draft = useCart(shift.id!, staff.id!, legacyTableId);
   const lines = draft.cart?.lines ?? [];
   const orderType = draft.cart?.orderType ?? 'dine_in';
@@ -115,26 +116,34 @@ export default function Cashier({ shift, staff, legacyTableId, onLegacyDone }: {
 
   return (
     <div className="cashier-layout h-full flex">
-      <div className="cashier-menu flex-1 min-w-0 p-6 overflow-y-auto">
-        <div className="mb-5"><p className="eyebrow">LAYANAN KEDAI</p><h1 className="text-2xl font-semibold">Kasir & Pesanan</h1><p className="text-sm text-gray-500 mt-1">Pilih menu, periksa pesanan, lalu selesaikan pembayaran.</p></div>
+      <div className="cashier-menu flex-1 min-w-0 px-6 pb-6 overflow-y-auto">
+        <h1 className="sr-only">Kasir</h1>
         {printerMsg && <p className="text-xs text-primary-bright mb-3">{printerMsg}</p>}
         <ProductGrid
           products={products}
           onAdd={add}
+          inCart={Object.fromEntries(lines.map(l => [l.product.id!, l.qty]))}
           toolbar={
             <button
               onClick={handlePrinter}
               disabled={!printerAvailable()}
               title={printerMsg || 'Printer thermal Bluetooth'}
-              className={`h-11 px-4 rounded-xl text-sm font-medium disabled:opacity-40 ${printerName ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600'}`}
+              className={`h-12 px-4 rounded-xl text-sm font-semibold shrink-0 disabled:opacity-40 ${printerName ? 'bg-green-100 text-green-700' : 'bg-white border border-gray-200 text-gray-600'}`}
             >
               {printerName ? `Printer: ${printerName}` : 'Hubungkan Printer'}
             </button>
           }
         />
+        {lines.length > 0 && (
+          <button type="button" onClick={() => basketRef.current?.scrollIntoView({ behavior: 'smooth' })}
+            className="cart-jump mt-4 w-full h-14 items-center justify-between rounded-2xl bg-maroon px-5 text-white shadow-lg">
+            <span className="text-sm font-semibold">{lines.reduce((s, l) => s + l.qty, 0)} item · <span className="tabular-nums">{rupiah(total)}</span></span>
+            <span className="text-sm font-bold text-brass-soft">Lihat pesanan ↓</span>
+          </button>
+        )}
       </div>
 
-      <div className="cashier-basket w-80 shrink-0 bg-white border-l border-gray-200 flex flex-col p-4">
+      <div ref={basketRef} className="cashier-basket w-80 shrink-0 bg-white border-l border-gray-200 flex flex-col p-4">
         <p role="status" className="text-xs text-emerald-700 mb-3">{draft.status}</p>
         {draft.error && <p role="alert" className="text-sm text-red-700 mb-2">{draft.error} <button className="underline" onClick={() => location.reload()}>Muat ulang</button></p>}
         <div className="flex items-center justify-between mb-1">
