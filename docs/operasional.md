@@ -65,3 +65,9 @@ Selama ada staf yang login, aplikasi meminta browser agar layar tablet tidak red
 ## Peringatan migrasi cloud
 
 Jika database cloud belum memakai migrasi yang dibutuhkan versi aplikasi ini, sinkronisasi berhenti dan owner melihat pita merah **Sinkronisasi cloud berhenti** di atas setiap layar. Transaksi tetap tersimpan di tablet. Ketuk **Buka Pemeriksaan Kesiapan**, unduh migrasi yang belum diterapkan dan jalankan di Supabase SQL Editor. Pita hilang setelah sinkronisasi berikutnya berhasil.
+
+## Menghapus menu dan staf
+
+Di **Kelola Menu**, ketuk **Hapus** di baris menu. Menu yang belum pernah terjual dihapus beserta resepnya. Menu yang sudah pernah terjual diarsipkan, sehingga hilang dari kasir dan daftar, tetapi riwayat penjualan, laporan dan HPP tetap mencatatnya. Menu yang diarsipkan bisa dilihat lewat **Tampilkan menu diarsipkan**, lalu diaktifkan lagi melalui Edit.
+
+Di **Pengaturan → Staf & Akses Login**, ketuk **Hapus** di baris staf. Akun yang belum pernah dipakai dihapus. Staf yang pernah bertugas (shift, transaksi, diskon, pengeluaran atau stok) dinonaktifkan dan disembunyikan, agar namanya tetap tercatat di riwayat. Owner tidak dapat menghapus akunnya sendiri, dan minimal harus ada satu owner aktif. Penghapusan ikut tersinkron ke cloud saat akun cloud owner login.

@@ -143,3 +143,30 @@ export async function resetStaffPin(id: number, pin: string, actorId: number) {
   await assertPinFree(pin, id);
   await db.staff.update(id, { pinHash: await secureHash(pin), mustChangePin: true });
 }
+
+/**
+ * Removes a staff account. One that never worked a shift or touched a record is deleted; one with
+ * history is deactivated instead, so shifts, receipts and audit entries keep the name.
+ */
+export async function deleteStaff(id: number, actorId: number): Promise<'deleted' | 'deactivated'> {
+  return db.transaction('rw', [db.staff, db.shifts, db.orders, db.audit, db.expenses, db.stockMovements, db.drafts], async () => {
+    await requireOwner(actorId);
+    const person = await db.staff.get(id);
+    if (!person) throw new Error('Staf tidak ditemukan.');
+    if (id === actorId) throw new Error('Owner tidak dapat menghapus akunnya sendiri.');
+    const owners = (await db.staff.toArray()).filter(s => s.id !== id && s.role === 'owner' && s.active !== false);
+    if (person.role === 'owner' && !owners.length) throw new Error('Minimal harus ada satu owner aktif.');
+    const used = await db.shifts.where('staffId').equals(id).count()
+      || await db.orders.filter(o => o.cashierId === id || o.discountApproverId === id).count()
+      || await db.audit.filter(a => a.actorId === id || a.approverId === id).count()
+      || await db.expenses.filter(e => e.actorId === id).count()
+      || await db.stockMovements.filter(m => m.actorId === id).count()
+      || await db.drafts.where('staffId').equals(id).count();
+    if (used) {
+      await db.staff.put({ ...person, active: false });
+      return 'deactivated';
+    }
+    await db.staff.delete(id);
+    return 'deleted';
+  });
+}

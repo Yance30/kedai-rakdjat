@@ -53,3 +53,21 @@ export async function recordStock(ingredientId:number, value:number, kind:'waste
     await db.stockMovements.add({ingredientId,kind,qty,unitCost:row.unitCost,reason:reason.trim(),actorId,createdAt:Date.now()});
   });
 }
+
+/**
+ * Removes a menu item. One that was never sold is deleted (with its recipe); one with sales is
+ * archived instead, so past orders, reports and HPP keep referring to it.
+ */
+export async function deleteProduct(id: number, actorId: number): Promise<'deleted' | 'archived'> {
+  return db.transaction('rw', [db.products, db.recipes, db.orderItems, db.staff], async () => {
+    await owner(actorId);
+    if (!await db.products.get(id)) throw new Error('Menu tidak ditemukan.');
+    if (await db.orderItems.filter(i => i.productId === id).count()) {
+      await db.products.update(id, { active: 0 });
+      return 'archived';
+    }
+    await db.recipes.delete(id);
+    await db.products.delete(id);
+    return 'deleted';
+  });
+}

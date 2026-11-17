@@ -1,23 +1,30 @@
 import { askConfirm, askText } from './Dialog';
 import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { addStaff, resetStaffPin, updateStaff } from '../auth';
+import { addStaff, deleteStaff, resetStaffPin, updateStaff } from '../auth';
 import { db } from '../db';
 import type { Role, Staff } from '../types';
 
-/** Owner-only: who may log in on this tablet. Staff are deactivated, never deleted, so shift history keeps its names. */
+/**
+ * Owner-only: who may log in on this tablet. Staff without history can be deleted; staff with
+ * shifts or records are deactivated instead, so their names stay on past receipts and reports.
+ */
 export default function StaffManager({ actor }: { actor: Staff }) {
-  const people = useLiveQuery(async () => (await db.staff.toArray()).map(({ id, name, role, active, mustChangePin }) => ({ id: id!, name, role, active: active !== false, mustChangePin: !!mustChangePin })), []) ?? [];
+  const everyone = useLiveQuery(async () => (await db.staff.toArray()).map(({ id, name, role, active, mustChangePin }) => ({ id: id!, name, role, active: active !== false, mustChangePin: !!mustChangePin })), []) ?? [];
+  const [showInactive, setShowInactive] = useState(false);
+  const inactive = everyone.filter(p => !p.active).length;
+  const people = showInactive ? everyone : everyone.filter(p => p.active);
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('kasir');
   const [pin, setPin] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
 
-  async function run(action: () => Promise<unknown>, done: string) {
+  /** `done` may be a message, or a function of the action's result when the outcome decides the message. */
+  async function run<T>(action: () => Promise<T>, done: string | ((result: T) => string)) {
     if (busy) return;
     setBusy(true); setMsg('');
-    try { await action(); setMsg(done); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
+    try { const result = await action(); setMsg(typeof done === 'string' ? done : done(result)); } catch (e) { setMsg((e as Error).message); } finally { setBusy(false); }
   }
 
   return (
@@ -26,7 +33,7 @@ export default function StaffManager({ actor }: { actor: Staff }) {
       <p className="text-xs text-gray-500 mb-4">
         Tambahkan setiap orang yang boleh memakai tablet ini. Login cukup dengan PIN, jadi setiap PIN harus berbeda.
         PIN yang Anda buat di sini bersifat sementara: staf wajib menggantinya dengan PIN pribadi saat login pertama.
-        Staf yang sudah tidak bertugas cukup dinonaktifkan; riwayat shift mereka tetap tersimpan.
+        Akun yang belum pernah dipakai bisa dihapus. Staf yang sudah pernah bertugas akan dinonaktifkan saat dihapus, agar riwayat shift dan transaksinya tetap tercatat.
       </p>
       {msg && <p role="status" className="text-sm text-primary-bright mb-3">{msg}</p>}
 
@@ -65,9 +72,22 @@ export default function StaffManager({ actor }: { actor: Staff }) {
                 void run(() => updateStaff(p.id, { active: !p.active }, actor.id!), p.active ? `${p.name} dinonaktifkan.` : `${p.name} diaktifkan kembali.`);
               }}>{p.active ? 'Nonaktifkan' : 'Aktifkan'}</button>
             )}
+            {p.id !== actor.id && (
+              <button disabled={busy} aria-label={`Hapus ${p.name}`} className="text-xs px-3 py-1.5 rounded-full bg-primary text-white hover:bg-primary-bright" onClick={async () => {
+                if (!(await askConfirm(`Akun ${p.name} dihapus dan tidak bisa login lagi. Jika ${p.name} pernah bertugas (shift, transaksi atau catatan lain), akunnya dinonaktifkan saja agar namanya tetap tercatat di riwayat.`, { title: `Hapus ${p.name}?`, confirmLabel: 'Hapus', danger: true }))) return;
+                void run(() => deleteStaff(p.id, actor.id!), result => result === 'deleted'
+                  ? `${p.name} dihapus.`
+                  : `${p.name} punya riwayat kerja, jadi dinonaktifkan dan disembunyikan. Riwayatnya tetap tersimpan.`);
+              }}>Hapus</button>
+            )}
           </li>
         ))}
       </ul>
+      {inactive > 0 && (
+        <button className="mt-3 text-xs text-gray-500 underline" onClick={() => setShowInactive(v => !v)}>
+          {showInactive ? 'Sembunyikan staf nonaktif' : `Tampilkan staf nonaktif (${inactive})`}
+        </button>
+      )}
     </section>
   );
 }
