@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.yance30.kedairakdjat",
+      "sha256_cert_fingerprints": ["02:6D:D3:B2:25:93:21:26:83:EE:29:11:A4:EE:44:17:B4:23:07:12:18:5D:93:65:76:E2:41:1F:4E:F0:0F:CD"]
+    }
+  }
+]

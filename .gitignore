@@ -8,3 +8,13 @@ dist
 .env.*
 build.log
 kedai-rakdjat-backup-*.json
+# Android (TWA) build outputs and machine-specific files; the signing key lives outside the repo
+android/.gradle
+android/build
+android/app/build
+android/local.properties
+android/*.apk
+android/*.aab
+*.keystore
+*.jks
+android/*.idsig
