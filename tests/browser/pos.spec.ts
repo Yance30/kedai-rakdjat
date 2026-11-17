@@ -64,7 +64,7 @@ test('PIN demo, pembayaran offline dengan printer gagal, reload PWA, refund, tut
 });
 test('portal cloud tanpa login tidak membuat transaksi kasir', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Login Cloud Owner / Dapur' }).click();
+  await page.getByRole('button', { name: 'Login Cloud Owner' }).click();
   await expect(page.getByRole('button', { name: 'Login Cloud', exact: true })).toBeVisible();
   await expect(page.getByLabel('Email cloud')).toBeVisible();
   expect(await counts(page)).toEqual({ orders: 0, payments: 0, audit: 0 });

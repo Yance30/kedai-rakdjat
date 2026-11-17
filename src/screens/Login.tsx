@@ -68,7 +68,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
           <h1 className="font-display text-primary font-bold text-3xl mb-1">Kedai Rakdjat</h1>
           <h2 className="font-semibold text-lg text-ink">Selamat Datang</h2>
           <p className="text-sm text-gray-500 mb-1">Masukkan PIN Anda untuk mulai.</p>
-          <button className="text-sm underline mb-4" onClick={onCloud}>Login Cloud Owner / Dapur</button>
+          <button className="text-sm underline mb-4" onClick={onCloud}>Login Cloud Owner</button>
 
           <form className="w-full max-w-[280px]" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <div key={error || 'pin'} className={`h-12 rounded-xl border bg-gray-50 grid place-items-center mb-1 transition-colors ${error ? 'kr-shake border-primary-bright/60' : 'border-gray-300'}`}>

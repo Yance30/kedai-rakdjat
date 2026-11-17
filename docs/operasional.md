@@ -36,9 +36,9 @@ Perubahan menu, pengeluaran, resep dan stok opname memerlukan login cloud owner 
 
 ## Pisah bill
 
-Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibuat dan langsung dibayar dari layar **Kasir**, lalu tiket masuk ke dapur/KDS.
+Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibuat dan langsung dibayar dari layar **Kasir**. Aplikasi tidak lagi memiliki layar dapur (KDS); pesanan diteruskan ke dapur lewat tiket dapur yang dicetak.
 
-**Nomor antrean dan nama pelanggan.** Setiap pesanan mendapat nomor antrean otomatis yang dimulai lagi dari 1 setiap shift. Nama pelanggan boleh diisi (opsional, maksimal 30 karakter). Nomor dan nama tampil besar di layar sukses, tiket dapur, struk dan KDS, sehingga pelayan bisa memanggil atau mengantar pesanan.
+**Nomor antrean dan nama pelanggan.** Setiap pesanan mendapat nomor antrean otomatis yang dimulai lagi dari 1 setiap shift. Nama pelanggan boleh diisi (opsional, maksimal 30 karakter). Nomor dan nama tampil besar di layar sukses, tiket dapur, dan struk, sehingga pelayan bisa memanggil atau mengantar pesanan.
 
 **Pisah Bayar.** Untuk rombongan yang membayar sendiri-sendiri: masukkan semua pesanan, ketuk **Pisah Bayar**, pilih item (dan jumlahnya) yang dibayar tamu pertama, lalu **Bayar Item Terpilih**. Bagian itu menjadi pesanan lunas tersendiri dengan struk dan tiket dapurnya sendiri. Sisa item tetap di keranjang dengan nomor antrean dan nama yang sama (tetap aman walau aplikasi ditutup), lalu dibayar dengan cara yang sama. Service charge, pajak dan diskon (dengan PIN owner) dihitung per bagian. Shift tidak bisa ditutup selama sisa keranjang belum dibayar atau dikosongkan.
 
@@ -56,7 +56,7 @@ Bahan aktif yang stoknya sama dengan atau di bawah **Stok minimum** muncul di pi
 
 ## Layar tetap menyala
 
-Selama ada staf yang login, aplikasi meminta browser agar layar tablet tidak redup atau terkunci, sehingga Kasir dan KDS tetap terlihat dan bunyi tiket dapur tidak terlewat. Izin ini otomatis dilepas saat aplikasi ditutup atau berpindah ke aplikasi lain, lalu diminta lagi saat kembali. Mode hemat baterai atau browser lama bisa menolak permintaan ini; layar lalu mengikuti pengaturan tablet biasa. Sambungkan tablet ke charger selama jam buka.
+Selama ada staf yang login, aplikasi meminta browser agar layar tablet tidak redup atau terkunci, sehingga layar Kasir tetap terlihat. Izin ini otomatis dilepas saat aplikasi ditutup atau berpindah ke aplikasi lain, lalu diminta lagi saat kembali. Mode hemat baterai atau browser lama bisa menolak permintaan ini; layar lalu mengikuti pengaturan tablet biasa. Sambungkan tablet ke charger selama jam buka.
 
 ## Jam ramai, menu terlaris dan pelanggan tetap
 

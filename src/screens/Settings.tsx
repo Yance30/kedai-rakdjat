@@ -294,7 +294,7 @@ export default function Settings({ staff }: { staff: Staff }) {
             {get('sync_paused') === 'true' && <div className="p-3 bg-amber-50 mb-3"><p>Sync dijeda setelah restore. Periksa data sebelum mengirim perubahan ke cloud.</p><button className="underline" onClick={async () => { if (await askConfirm('Data cloud perangkat ini akan mengikuti data tablet.', { title: 'Kirim hasil restore ke cloud?', confirmLabel: 'Kirim' })) { await put('sync_paused', 'false'); await syncNow(); } }}>Aktifkan kembali sync</button></div>}
             {get('sync_error') && <p role="alert" className="text-sm mb-3">{get('sync_error')}</p>}
             <p className="text-xs text-gray-500 mb-4">
-              Tablet tetap jalan offline. Isi URL & anon key proyek Supabase untuk mengaktifkan sync, Dashboard Owner, dan KDS dapur.
+              Tablet tetap jalan offline. Isi URL & anon key proyek Supabase untuk mengaktifkan sync dan Dashboard Owner.
             </p>
             <div className="space-y-3 mb-4 max-w-xl">
               <input

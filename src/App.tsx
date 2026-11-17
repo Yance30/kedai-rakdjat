@@ -20,7 +20,6 @@ import Report from './screens/Report';
 import History from './screens/History';
 const Settings = lazy(() => import('./screens/Settings'));
 const Cloud = lazy(() => import('./screens/Cloud'));
-const Kds = lazy(() => import('./screens/Kds'));
 
 async function ensureShift(staffId: number): Promise<Shift> {
   return db.transaction('rw', db.shifts, async () => {
@@ -36,7 +35,6 @@ const ICONS: Record<string, string> = {
   kasir: 'M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z M8 7h8 M8 11h8 M8 15h5',
   keuangan: 'M21 12V7H5a2 2 0 0 1 0-4h14v4 M3 5v14a2 2 0 0 0 2 2h16v-5 M18 12a2 2 0 0 0 0 4h4v-4Z',
   riwayat: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z M12 6v6l4 2',
-  kds: 'M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3 2.5.5 5 2.5 5 6a5 5 0 1 1-10 0c0-1.5.5-3 2-4.5.5 1.5 1 2 1.5 2Z M12 2c1 3 2.5 3.5 4 5 1.5 1.5 3 3.5 3 7',
   cloud: 'M3 3v18h18 M7 15v3 M12 10v8 M17 6v12',
   pengaturan: 'M4 21v-7 M4 10V3 M12 21v-9 M12 8V3 M20 21v-5 M20 12V3 M1 14h6 M9 8h6 M17 16h6',
   penjualan: 'M3 17l6-6 4 4 8-8 M14 7h7v7',
@@ -80,7 +78,7 @@ export default function App() {
   }, []);
   const [staff, setStaff] = useState<Staff | null>(null);
   const [shift, setShift] = useState<Shift | null>(null);
-  const [tab, setTab] = useState<'kasir' | 'laporan' | 'riwayat' | 'cloud' | 'kds' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
+  const [tab, setTab] = useState<'kasir' | 'laporan' | 'riwayat' | 'cloud' | 'pengaturan' | 'penjualan' | 'stok' | 'menu' | 'biaya' | 'panduan'>('kasir');
   // Pesanan/keranjang meja lama (dibuat sebelum fitur meja dihapus) tetap bisa dilunasi,
   // karena tutup shift menolak selama masih ada pesanan terbuka atau keranjang berisi.
   const [activeTable, setActiveTable] = useState<number | null>(null);
@@ -92,7 +90,7 @@ export default function App() {
     return ids.map(id => ({ id, name: names.get(id)! }));
   }, [shift?.id]) ?? [];
   const [ready, setReady] = useState(false);
-  // Keep the screen on for signed-in staff: counter and KDS tablets sit idle between orders.
+  // Keep the screen on for signed-in staff: the counter tablet sits idle between orders.
   useWakeLock(!!staff);
   const [online, setOnline] = useState(navigator.onLine);
 
@@ -147,7 +145,6 @@ export default function App() {
     { key: 'biaya', label: 'Pengeluaran', icon: 'biaya', ownerOnly: true },
     { key: 'panduan', label: 'Panduan & Backup', icon: 'panduan', ownerOnly: true },
     { key: 'stok', label: 'Stok & Resep', icon: 'stok', ownerOnly: true },
-    { key: 'kds', label: 'KDS Dapur', icon: 'kds' },
     { key: 'cloud', label: 'Dashboard Owner', icon: 'cloud', ownerOnly: true },
     { key: 'pengaturan', label: 'Pengaturan', icon: 'pengaturan' },
   ];
@@ -239,8 +236,6 @@ export default function App() {
             <Report shift={shift} actorId={staff.id!} onClosed={() => { setShift(null); setStaff(null); }} />
           ) : tab === 'riwayat' ? (
             <History shift={shift} actor={staff} />
-          ) : tab === 'kds' ? (
-            <CloudAccess roles={['owner', 'kitchen']}>{device => <Kds key={device} device={device} />}</CloudAccess>
           ) : tab === 'penjualan' && staff.role === 'owner' ? (
             <Sales />
           ) : tab === 'menu' && staff.role === 'owner' ? (

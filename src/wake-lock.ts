@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 /**
- * Keeps the tablet screen on while `active` (cashier and KDS tablets must not dim between orders).
+ * Keeps the tablet screen on while `active` (the cashier tablet must not dim between orders).
  * Browsers drop the lock whenever the page is hidden, so it is requested again on return.
  * Unsupported browsers or a denied request simply leave the normal screen timeout in place.
  */

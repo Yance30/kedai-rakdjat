@@ -16,7 +16,6 @@ Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migra
 - **Static QRIS payments** — shows the kedai's QRIS code; cashier confirms only after the merchant app/soundbox reports the payment.
 - **Bluetooth thermal printing** — ESC/POS receipts, kitchen tickets, and temporary bills over Web Bluetooth.
 - **Owner dashboard (cloud)** — today's revenue, payment mix, 7-day revenue trend, best-selling menu ranking, average ticket, and day-over-day growth — all rendered with dependency-free SVG charts.
-- **Kitchen Display System (KDS)** — incoming → cooking → ready columns, live from the cloud.
 - **PWA** — installable on the tablet home screen, standalone mode, precached app shell.
 - **Split bill** — guests at one table pay for their own items; each part becomes its own paid order while the rest of the table stays open and the kitchen keeps one ticket.
 - **Backup & recovery** — one-click JSON export/import, automatic daily and shift-close snapshots on the tablet, persistent-storage request, and **restore from cloud** onto a replacement tablet.
@@ -44,13 +43,12 @@ Tablet (cashier)                    Supabase (cloud)
 │ offline-first POS   │  upserts   │ products, tables, …  │
 └─────────────────────┘            └──────────┬───────────┘
                                               │ read
-                              ┌───────────────┴───────────────┐
-                              ▼                               ▼
-                     Owner dashboard                    KDS (kitchen)
-                     revenue & charts                   incoming/cooking/ready
+                                              ▼
+                                      Owner dashboard
+                                      revenue & charts
 ```
 
-`kds_status` lives only in the cloud and is omitted from push payloads, so kitchen progress is never overwritten by the tablet.
+The on-screen kitchen display (KDS) was removed from the app. The cloud schema still has its `kds_status` column and `kitchen` role, unused and left in place so no migration is needed.
 
 ## Getting started
 
@@ -102,7 +100,7 @@ Initial PINs: cashier `1111` · owner `1234`. The app requires replacement of th
 ```
 src/
 ├── screens/          Login, Cashier, Report (Keuangan), History, Sales, Menu,
-│                     Expenses, Inventory, OwnerDashboard, Cloud, Kds, Settings
+│                     Expenses, Inventory, OwnerDashboard, Cloud, Settings
 ├── components/       SVG charts, cloud login, cloud restore, diagnostics, setup guide
 ├── db.ts             Dexie schema and seeds
 ├── auth.ts           PBKDF2 PINs and escalating lockout

@@ -22,7 +22,7 @@ Keanggotaan akun dapur dan owner menunjuk ID tablet kasir yang dipantau, bukan I
 
 5. Isi URL dan **publishable/anon key**, bukan service-role/secret key, pada Pengaturan. Login cloud sebagai owner di tablet kasir dan lakukan **Sync Sekarang** pertama kali. Ini merekonsiliasi data cloud perangkat tersebut dengan data tablet, termasuk menghapus sisa item dari versi lama. Pastikan tablet ini berisi data sumber yang benar.
 6. Setelah bootstrap, keluar dari akun cloud owner di tablet dan login akun cloud cashier melalui Pengaturan. Login PIN lokal dan akun cloud adalah dua hal berbeda. Owner perlu login cloud lagi saat melakukan perubahan menu/staf atau pemulihan data; batch tersebut ditolak untuk akun cashier.
-7. Pada perangkat owner/dapur, gunakan **Login Cloud Owner / Dapur** dari layar login. Tidak perlu membuka shift atau memakai PIN kasir. Isi koneksi jika belum tersedia, lalu login dan pilih perangkat.
+7. Pada perangkat owner, gunakan **Login Cloud Owner** dari layar login. Tidak perlu membuka shift atau memakai PIN kasir. Isi koneksi jika belum tersedia, lalu login dan pilih perangkat.
 
 | Akun cloud | Hak akses |
 | --- | --- |
