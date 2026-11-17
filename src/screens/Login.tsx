@@ -58,29 +58,17 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
     <div className="h-full relative overflow-hidden bg-white">
       {intro && <Splash className="kr-intro absolute inset-0 z-50" />}
 
-      <div className="h-full flex">
-        <div className="kr-slide-left relative hidden md:block flex-1 min-w-0">
-          <img src={`${import.meta.env.BASE_URL}login-bg.png`} alt="" className="absolute inset-0 w-full h-full object-cover" />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-black/25" />
-          <div className="absolute inset-0 grid place-items-center p-8">
-            <div className="kr-fade-up bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-8 max-w-sm text-center" style={{ animationDelay: '0.35s' }}>
-              <h1 className="text-primary font-bold text-3xl mb-3">Kedai Rakdjat</h1>
-              <p className="text-gray-600 text-sm leading-relaxed mb-6">
-                Pelayanan hangat, transaksi tertata. Kelola pesanan, kas, dan persediaan kedai dalam satu tempat.
-              </p>
-              <div className="flex justify-center gap-6 text-[11px] text-gray-500 font-semibold tracking-wide">
-                <span>TRANSAKSI CEPAT</span>
-                <span>TETAP JALAN OFFLINE</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="kr-slide-right w-full md:w-[420px] shrink-0 bg-white flex flex-col items-center justify-center p-8 overflow-y-auto">
-          <div className="w-16 h-16 rounded-xl bg-primary text-white grid place-items-center text-3xl mb-4 shadow-md">👨‍🍳</div>
-          <h2 className="font-bold text-2xl text-ink mb-1">Selamat Datang</h2>
-          <button className="text-sm underline mb-3" onClick={onCloud}>Login Cloud Owner / Dapur</button>
-          <p className="text-sm text-gray-500 mb-4">Masukkan PIN Anda untuk mulai.</p>
+      {/* The photo fills the screen; the PIN card sits in the middle on every screen size. */}
+      <img src={`${import.meta.env.BASE_URL}login-bg.png`} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-black/40" />
+      <div className="relative h-full overflow-y-auto">
+        <div className="min-h-full grid place-items-center p-4 sm:p-8">
+        <div className="kr-zoom w-full max-w-[380px] bg-white rounded-2xl shadow-2xl px-6 py-8 sm:px-8 flex flex-col items-center">
+          <div className="w-16 h-16 rounded-xl bg-primary text-white grid place-items-center text-3xl mb-3 shadow-md">👨‍🍳</div>
+          <h1 className="font-display text-primary font-bold text-3xl mb-1">Kedai Rakdjat</h1>
+          <h2 className="font-semibold text-lg text-ink">Selamat Datang</h2>
+          <p className="text-sm text-gray-500 mb-1">Masukkan PIN Anda untuk mulai.</p>
+          <button className="text-sm underline mb-4" onClick={onCloud}>Login Cloud Owner / Dapur</button>
 
           <form className="w-full max-w-[280px]" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
             <div key={error || 'pin'} className={`h-12 rounded-xl border bg-gray-50 grid place-items-center mb-1 transition-colors ${error ? 'kr-shake border-primary-bright/60' : 'border-gray-300'}`}>
@@ -104,7 +92,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
                     else if (k === '←') setPin((p) => p.slice(0, -1));
                     else if (pin.length < 6) setPin((p) => p + k);
                   }}
-                  className="h-12 rounded-xl bg-gray-100 hover:bg-gray-200 active:bg-primary active:text-white font-semibold text-lg transition-colors"
+                  className="h-12 rounded-xl bg-gray-100 border border-gray-200 hover:bg-gray-200 active:bg-primary active:text-white font-semibold text-lg transition-colors"
                 >
                   {k}
                 </button>
@@ -120,7 +108,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
             {demo && <p className="text-center text-xs text-gray-400 mt-3">PIN awal: kasir 1111 · owner 1234 (wajib diganti saat login pertama)</p>}
           </form>
 
-          <div className="flex items-center gap-4 text-xs text-gray-500 mt-8">
+          <div className="flex items-center gap-4 text-xs text-gray-500 mt-6">
             <span>🏬 Main Branch</span>
             <span>
               Koneksi:{' '}
@@ -129,10 +117,8 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
               </span>
             </span>
           </div>
-          <div className="text-center text-[11px] text-gray-400 mt-6">
-            Kedai Rakdjat · Sistem Kasir
-            <div className="text-primary-bright font-semibold mt-1">Data transaksi tersimpan di perangkat ini</div>
-          </div>
+          <div className="text-center text-[11px] text-primary-bright font-semibold mt-3">Data transaksi tersimpan di perangkat ini</div>
+        </div>
         </div>
       </div>
     </div>
