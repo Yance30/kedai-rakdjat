@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
         short_name: 'Rakdjat POS',
         description: 'Kasir offline-first Kedai Rakdjat',
         theme_color: '#8a000a',
-        background_color: '#f8f9fb',
+        background_color: '#8a000a',
         display: 'standalone',
         start_url: '.',
         scope: '.',

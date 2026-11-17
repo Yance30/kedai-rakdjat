@@ -117,10 +117,11 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="h-full grid place-items-center kr-shell">
-        <div className="text-center kr-zoom">
-          <div className="kr-breathe w-16 h-16 rounded-full border border-brass/60 grid place-items-center font-display font-bold text-brass-soft text-2xl mx-auto mb-4">KR</div>
-          <div className="font-display font-semibold text-2xl text-white">Kedai Rakdjat</div>
+      // Same red and logo as the Android splash and the login intro, so launching shows one colour.
+      <div className="h-full grid place-items-center bg-primary">
+        <div className="text-center">
+          <div className="kr-breathe w-20 h-20 rounded-2xl bg-white text-primary grid place-items-center font-bold text-3xl mx-auto mb-4 shadow-lg">KR</div>
+          <div className="text-white font-bold text-3xl tracking-wide">Kedai Rakdjat</div>
         </div>
       </div>
     );
