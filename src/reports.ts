@@ -50,3 +50,49 @@ export function downloadCsv(rows: (string | number | null | undefined)[][], file
   const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+type ReportRow = ReturnType<typeof buildSalesReport>['rows'][number];
+
+/** WIB hour of a timestamp (0–23). */
+export function jakartaHour(time: number) {
+  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', hour: '2-digit', hourCycle: 'h23' }).format(time));
+}
+
+/** Paid sales per WIB hour, trimmed to the hours the shop actually trades. */
+export function hourlySales(rows: ReportRow[]) {
+  const hours = Array.from({ length: 24 }, (_, hour) => ({ hour, net: 0, count: 0 }));
+  for (const r of rows) {
+    if (r.status !== 'paid') continue;
+    const h = hours[jakartaHour(r.time)];
+    h.net += r.net;
+    h.count += 1;
+  }
+  const busy = hours.filter(h => h.count > 0);
+  if (!busy.length) return [];
+  return hours.slice(busy[0].hour, busy[busy.length - 1].hour + 1);
+}
+
+/**
+ * Named customers in the report range, most frequent first.
+ * Parts of one split bill share a shift and queue number, so they count as a single visit.
+ */
+export function regularCustomers(orders: Order[], rows: ReportRow[], limit = 10) {
+  const byId = new Map(orders.map(o => [o.id, o]));
+  const people = new Map<string, { name: string; visits: Set<string>; total: number; last: number }>();
+  for (const r of rows) {
+    if (r.status !== 'paid') continue;
+    const o = byId.get(r.id);
+    const name = o?.customerName?.trim().replace(/\s+/g, ' ');
+    if (!o || !name) continue;
+    const key = name.toLocaleLowerCase('id-ID');
+    const entry = people.get(key) ?? { name, visits: new Set<string>(), total: 0, last: 0 };
+    entry.visits.add(`${o.shiftId}-${o.queueNo ?? `o${o.id}`}`);
+    entry.total += r.net;
+    entry.last = Math.max(entry.last, r.time);
+    people.set(key, entry);
+  }
+  return [...people.values()]
+    .map(p => ({ name: p.name, visits: p.visits.size, total: p.total, last: p.last }))
+    .sort((a, b) => b.visits - a.visits || b.total - a.total)
+    .slice(0, limit);
+}

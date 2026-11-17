@@ -28,7 +28,7 @@ export async function loadCloudReport(sb: SupabaseClient,device:string,from:stri
     const [o,it]=await Promise.all([allRows(sb,'orders',device,q=>q.in('local_id',slice)),allRows(sb,'order_items',device,q=>q.in('order_local_id',slice))]);
     rawOrders.push(...o);items.push(...it);
   }
-  const orders:Order[]=rawOrders.map(o=>({id:o.local_id,shiftId:o.shift_local_id,status:o.status,createdAt:o.created_at,subtotal:o.subtotal,discount:o.discount??0,service:o.service,tax:o.tax,total:o.total,orderType:o.order_type,tableId:o.table_local_id??undefined,cashierId:o.cashier_local_id??undefined,paidAt:o.paid_at??undefined,costTotal:o.cost_total??undefined,costComplete:o.cost_complete??undefined,stockReturned:o.stock_returned??undefined}));
+  const orders:Order[]=rawOrders.map(o=>({id:o.local_id,shiftId:o.shift_local_id,status:o.status,createdAt:o.created_at,subtotal:o.subtotal,discount:o.discount??0,service:o.service,tax:o.tax,total:o.total,orderType:o.order_type,tableId:o.table_local_id??undefined,cashierId:o.cashier_local_id??undefined,paidAt:o.paid_at??undefined,costTotal:o.cost_total??undefined,costComplete:o.cost_complete??undefined,stockReturned:o.stock_returned??undefined,queueNo:o.queue_no??undefined,customerName:o.customer_name??undefined}));
   const payments:Payment[]=rawPayments.map(p=>({id:p.local_id,orderId:p.order_local_id,shiftId:p.shift_local_id,method:p.method,amount:p.amount,tendered:p.tendered,change:p.change,createdAt:p.created_at}));
   const staff:Staff[]=rawStaff.map(s=>({id:s.local_id,name:s.name,role:s.role,pinHash:''}));
   const shifts:Shift[]=rawShifts.map(s=>({id:s.local_id,staffId:s.staff_local_id,status:s.status,openedAt:s.opened_at,openingFloat:s.opening_float}));

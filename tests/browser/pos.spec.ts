@@ -166,6 +166,8 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   expect(await counts(page)).toEqual({orders:1,payments:1,audit:2});
   await page.getByRole('button',{name:'Laporan Penjualan',exact:true}).click();
   await expect(page.getByText('Rp 16.000',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Jam Ramai'})).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Pelanggan Tetap'})).toBeVisible();
   const download=page.waitForEvent('download');await page.getByRole('button',{name:'Ekspor CSV',exact:true}).click();
   const file=await download;expect(file.suggestedFilename()).toMatch(/^penjualan-/);
   const contents=readFileSync((await file.path())!,'utf8');expect(contents).toContain('4000');expect(contents).toContain('16000');
@@ -185,6 +187,16 @@ test('tablet: stok resep, pemulihan keranjang, cetak salinan, laporan dan ekspor
   await page.getByRole('button',{name:'Simpan pencatatan stok',exact:true}).click();
   await expect(page.getByRole('row').filter({hasText:'Biji kopi uji'}).first()).toContainText('940 g');
   await page.screenshot({path:'test-results/stok-opname.png',animations:'disabled'});
+  await page.getByLabel('Jenis pencatatan',{exact:true}).selectOption('stocktake');
+  await page.getByLabel('Bahan yang dihitung',{exact:true}).selectOption('1');
+  await page.getByLabel('Jumlah fisik aktual',{exact:true}).fill('15');
+  await page.getByLabel('Alasan pencatatan',{exact:true}).fill('Stok hampir habis');
+  await page.getByRole('button',{name:'Simpan pencatatan stok',exact:true}).click();
+  await expect(page.getByRole('row').filter({hasText:'Biji kopi uji'}).first()).toContainText('15 g');
+  await page.getByRole('button',{name:'Kasir',exact:true}).click();
+  const lowBanner=page.getByRole('status').filter({hasText:'Stok menipis:'});
+  await expect(lowBanner).toContainText('Biji kopi uji (15 g)');
+  await expect(lowBanner).toContainText('Bahan tidak cukup untuk:');
   await page.setViewportSize({width:768,height:1024});
   await page.getByRole('button',{name:'Kasir',exact:true}).click();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

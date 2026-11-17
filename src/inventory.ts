@@ -82,3 +82,22 @@ export async function returnOrderStock(orderId: number, actorId: number) {
     await db.stockMovements.add({ ingredientId: m.ingredientId, orderId, kind: 'return', qty: -m.qty, unitCost: m.unitCost, actorId, reason: `Pengembalian bahan pesanan #${orderId}`, createdAt: Date.now() });
   }
 }
+
+/**
+ * Active ingredients at or below their minimum, plus the active menus that use them.
+ * `short` = a menu that needs more of the ingredient per portion than is left.
+ */
+export function lowStockSummary(ingredients: Ingredient[], recipes: Recipe[], products: { id?: number; name: string; active: 0 | 1 }[]) {
+  const low = ingredients.filter(i => i.active && i.stock <= i.minimum);
+  const lowIds = new Map(low.map(i => [i.id!, i]));
+  const names = new Map(products.filter(p => p.active).map(p => [p.id!, p.name]));
+  const affected: { name: string; short: boolean }[] = [];
+  for (const r of recipes) {
+    const name = names.get(r.productId);
+    const uses = r.ingredients.filter(part => lowIds.has(part.ingredientId));
+    if (!name || !uses.length) continue;
+    affected.push({ name, short: uses.some(part => lowIds.get(part.ingredientId)!.stock < part.qty) });
+  }
+  affected.sort((a, b) => Number(b.short) - Number(a.short) || a.name.localeCompare(b.name, 'id'));
+  return { low, affected };
+}

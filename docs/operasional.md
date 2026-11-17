@@ -4,7 +4,7 @@
 
 Aplikasi terbaru memerlukan schema **7**. Untuk proyek versi awal yang sudah memiliki tabel POS, jalankan **0002_secure_sync.sql → 0003_inventory_reporting.sql → 0004_operations.sql → 0005_drawer_expenses.sql → 0006_split_bill.sql → 0007_queue_numbers.sql** melalui Supabase SQL Editor. Tunggu setiap file berhasil sebelum melanjutkan. Jangan mengulang migrasi yang sudah sukses. Proyek baru menjalankan 0001 terlebih dahulu. Semua file tersedia di Pengaturan → Pemeriksaan Kesiapan Kedai. Unduhan file tidak menerapkan migrasi.
 
-Setelah migrasi, ikuti [pengaturan akun dan membership](production-setup.md), login cloud owner dan jalankan pemeriksaan kesiapan. Pemeriksaan harus menunjukkan schema 6 dan akses anonim ditolak. Pastikan tablet berisi data sumber yang benar sebelum sinkronisasi awal. Pengujian SQL lokal tidak membuktikan penerapan di proyek cloud.
+Setelah migrasi, ikuti [pengaturan akun dan membership](production-setup.md), login cloud owner dan jalankan pemeriksaan kesiapan. Pemeriksaan harus menunjukkan schema 7 dan akses anonim ditolak. Pastikan tablet berisi data sumber yang benar sebelum sinkronisasi awal. Pengujian SQL lokal tidak membuktikan penerapan di proyek cloud.
 
 ## Menu
 
@@ -49,3 +49,19 @@ Kedai tidak memakai pengaturan meja: semua pesanan (dine-in atau takeaway) dibua
 Tablet membuat salinan lengkap otomatis sekali sehari dan setiap tutup shift. Tujuh salinan otomatis terakhir disimpan, ditambah salinan sebelum setiap restore. Daftarnya ada di **Pengaturan → Backup Data**. Salinan ini berada di tablet yang sama, jadi tetap unduh backup ke perangkat lain. Aplikasi juga meminta browser menyimpan data secara permanen (cek di Pemeriksaan Kesiapan). Pasang aplikasi ke layar utama agar izin ini lebih mungkin diberikan.
 
 Bila tablet rusak atau hilang, siapkan tablet pengganti dan login sebagai owner (PIN demo lalu ganti). Buka **Pengaturan → Koneksi Cloud**, login akun cloud owner, lalu pilih perangkat lama. Ketuk **Periksa data cloud**, isi PIN baru untuk setiap staf, dan centang bahwa tablet lama tidak dipakai lagi. Setelah itu ketuk **Pulihkan data dari cloud**. Tablet pengganti melanjutkan ID perangkat lama. PIN dan pengaturan tablet (service charge, foto QRIS) tidak ada di cloud, jadi setiap staf wajib mengganti PIN saat login pertama dan pengaturan perlu diisi ulang. Sync dijeda setelah pemulihan. Periksa data, lalu aktifkan kembali dari Pengaturan. Data yang belum sempat tersinkron dari tablet lama tidak dapat dipulihkan dari cloud.
+
+## Peringatan stok menipis
+
+Bahan aktif yang stoknya sama dengan atau di bawah **Stok minimum** muncul di pita kuning di atas layar **Kasir** (untuk semua staf) dan di **Dashboard Owner**. Pita menyebut menu yang memakai bahan tersebut; menu bertulisan **Bahan tidak cukup untuk** berarti sisa bahan kurang dari kebutuhan satu porsi. Aplikasi tidak memblokir penjualan menu tersebut. Tandai menu habis di Kelola Menu bila memang tidak bisa dibuat. Owner dapat mengetuk **Buka Stok & Resep** untuk mencatat pembelian. Peringatan berasal dari data stok di tablet ini.
+
+## Layar tetap menyala
+
+Selama ada staf yang login, aplikasi meminta browser agar layar tablet tidak redup atau terkunci, sehingga Kasir dan KDS tetap terlihat dan bunyi tiket dapur tidak terlewat. Izin ini otomatis dilepas saat aplikasi ditutup atau berpindah ke aplikasi lain, lalu diminta lagi saat kembali. Mode hemat baterai atau browser lama bisa menolak permintaan ini; layar lalu mengikuti pengaturan tablet biasa. Sambungkan tablet ke charger selama jam buka.
+
+## Jam ramai, menu terlaris dan pelanggan tetap
+
+**Laporan Penjualan** menampilkan **Jam Ramai** (penerimaan per jam WIB dan jam tersibuk), **Menu Terlaris** (lima menu dengan porsi terbanyak) dan **Pelanggan Tetap** dalam rentang tanggal yang dipilih. Dashboard Owner menampilkan Jam Ramai dan Pelanggan Tetap dari data cloud. Pelanggan tetap disusun dari nama yang diisi kasir: huruf besar/kecil dan spasi berlebih disamakan, dan bagian pisah bayar dihitung satu kunjungan. Nama yang sama bisa saja milik orang berbeda, jadi daftar ini hanya perkiraan. Data pelanggan cloud memerlukan migrasi 0007.
+
+## Peringatan migrasi cloud
+
+Jika database cloud belum memakai migrasi yang dibutuhkan versi aplikasi ini, sinkronisasi berhenti dan owner melihat pita merah **Sinkronisasi cloud berhenti** di atas setiap layar. Transaksi tetap tersimpan di tablet. Ketuk **Buka Pemeriksaan Kesiapan**, unduh migrasi yang belum diterapkan dan jalankan di Supabase SQL Editor. Pita hilang setelah sinkronisasi berikutnya berhasil.

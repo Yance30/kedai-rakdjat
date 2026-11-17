@@ -11,6 +11,8 @@ export interface SyncResult {
 /** Cloud schema version this app requires (see supabase/migrations). */
 export const SCHEMA_VERSION = 7;
 const MIGRATIONS = '0002 sampai 0007';
+/** Start of the sync error shown when the cloud database is on an older migration than this app. */
+export const SCHEMA_MISMATCH = 'Migrasi cloud belum sesuai.';
 
 let flight: Promise<SyncResult> | undefined;
 export async function exclusive<T>(run: () => Promise<T>): Promise<T> {
@@ -34,7 +36,7 @@ async function synchronize(): Promise<SyncResult> {
     // The local data and last acknowledged signatures form a durable change queue.
     if (changes.length || !ack) {
       const schema = await sb.rpc('pos_schema_version');
-      if (schema.error || schema.data !== SCHEMA_VERSION) throw new Error(`Migrasi cloud belum sesuai. Jalankan migrasi ${MIGRATIONS} yang belum diterapkan melalui Supabase SQL Editor. Data tetap tersimpan di tablet.`);
+      if (schema.error || schema.data !== SCHEMA_VERSION) throw new Error(`${SCHEMA_MISMATCH} Jalankan migrasi ${MIGRATIONS} yang belum diterapkan melalui Supabase SQL Editor. Data tetap tersimpan di tablet.`);
       const { error } = await sb.rpc('apply_pos_changes', { p_device: dev, p_changes: changes, p_full: !ack });
       if (error) throw error;
       await db.syncState.put({ key: scope, value: JSON.stringify(acknowledge(current)) });

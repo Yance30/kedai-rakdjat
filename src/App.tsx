@@ -1,7 +1,9 @@
 import { lazy, useEffect, useRef, useState } from 'react';
 import { db } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { startSync } from './sync';
+import { SCHEMA_MISMATCH, startSync } from './sync';
+import { useWakeLock } from './wake-lock';
+import LowStockBanner from './components/LowStockBanner';
 import { dailySnapshot, requestPersistentStorage } from './backup';
 import CloudAccess from './components/CloudAccess';
 const CloudPortal = lazy(() => import('./screens/CloudPortal'));
@@ -89,6 +91,8 @@ export default function App() {
     return ids.map(id => ({ id, name: names.get(id)! }));
   }, [shift?.id]) ?? [];
   const [ready, setReady] = useState(false);
+  // Keep the screen on for signed-in staff: counter and KDS tablets sit idle between orders.
+  useWakeLock(!!staff);
   const [online, setOnline] = useState(navigator.onLine);
 
   function go(t: typeof tab) {
@@ -207,10 +211,18 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main className="flex-1 min-w-0">
-        <div key={tab + (activeTable ?? '')} className="h-full kr-page">
+      <main className="flex-1 min-w-0 flex flex-col">
+        {staff.role === 'owner' && syncError?.startsWith(SCHEMA_MISMATCH) && (
+          <div role="alert" className="shrink-0 bg-red-50 border-b border-red-200 px-6 py-2 text-sm text-red-900 flex flex-wrap items-center gap-2">
+            <strong>Sinkronisasi cloud berhenti:</strong>
+            <span>database cloud belum memakai migrasi terbaru. Transaksi tetap tersimpan di tablet.</span>
+            <button onClick={() => go('pengaturan')} className="underline font-semibold">Buka Pemeriksaan Kesiapan</button>
+          </div>
+        )}
+        <div key={tab + (activeTable ?? '')} className="flex-1 min-h-0 kr-page">
           {tab === 'kasir' ? (
             <div className="h-full flex flex-col">
+              {!activeTable && <LowStockBanner className="shrink-0 border-b px-6 py-2" onOpen={staff.role === 'owner' ? () => go('stok') : undefined} />}
               {!activeTable && legacyTables.length > 0 && (
                 <div role="status" className="shrink-0 bg-amber-50 border-b border-amber-200 px-6 py-2 text-sm text-amber-900 flex flex-wrap items-center gap-2">
                   <span>Pesanan dari versi lama belum dibayar:</span>
