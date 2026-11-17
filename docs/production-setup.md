@@ -1,6 +1,6 @@
 # Penerapan keamanan dan keandalan POS
 
-Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 6](operasional.md).
+Panduan versi terbaru: [menu, pengeluaran, diskon, stok opname, backup dan migrasi schema 7](operasional.md).
 
 Perubahan aplikasi tersedia di repository. Migrasi SQL tidak otomatis diterapkan ke proyek Supabase. Backup data tablet dan database cloud sebelum penerapan. Lakukan di luar jam transaksi dan tutup tab aplikasi versi lama agar tidak memakai jalur sinkronisasi lama.
 
