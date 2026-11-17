@@ -4,6 +4,7 @@ import { authenticatePin, changePin } from '../auth';
 import { db } from '../db';
 import { haptic } from '../feedback';
 import type { Staff } from '../types';
+import Splash from '../components/Splash';
 
 export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => void; onCloud: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -55,15 +56,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
 
   return (
     <div className="h-full relative overflow-hidden bg-white">
-      {intro && (
-        <div className="kr-intro absolute inset-0 z-50 bg-primary grid place-items-center">
-          <div className="kr-zoom text-center">
-            <div className="kr-glow w-20 h-20 rounded-2xl bg-white text-primary grid place-items-center font-bold text-3xl mx-auto mb-4 shadow-lg">KR</div>
-            <div className="text-white font-bold text-3xl tracking-wide">Kedai Rakdjat</div>
-            <div className="text-white/70 text-sm mt-2 tracking-widest uppercase">Enterprise POS</div>
-          </div>
-        </div>
-      )}
+      {intro && <Splash className="kr-intro absolute inset-0 z-50" />}
 
       <div className="h-full flex">
         <div className="kr-slide-left relative hidden md:block flex-1 min-w-0">

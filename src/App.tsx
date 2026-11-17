@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { SCHEMA_MISMATCH, startSync } from './sync';
 import { useWakeLock } from './wake-lock';
 import LowStockBanner from './components/LowStockBanner';
+import Splash from './components/Splash';
 import { dailySnapshot, requestPersistentStorage } from './backup';
 import CloudAccess from './components/CloudAccess';
 const CloudPortal = lazy(() => import('./screens/CloudPortal'));
@@ -116,15 +117,7 @@ export default function App() {
   }, []);
 
   if (!ready) {
-    return (
-      // Same red and logo as the Android splash and the login intro, so launching shows one colour.
-      <div className="h-full grid place-items-center bg-primary">
-        <div className="text-center">
-          <div className="kr-breathe w-20 h-20 rounded-2xl bg-white text-primary grid place-items-center font-bold text-3xl mx-auto mb-4 shadow-lg">KR</div>
-          <div className="text-white font-bold text-3xl tracking-wide">Kedai Rakdjat</div>
-        </div>
-      </div>
-    );
+    return <Splash className="h-full" />;
   }
 
   if (cloudPortal) return <CloudPortal onBack={() => setCloudPortal(false)} />;

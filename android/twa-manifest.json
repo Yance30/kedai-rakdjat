@@ -4,13 +4,13 @@
   "name": "Kedai Rakdjat POS",
   "launcherName": "Rakdjat POS",
   "display": "standalone",
-  "themeColor": "#8A000A",
-  "themeColorDark": "#8A000A",
-  "navigationColor": "#8A000A",
-  "navigationColorDark": "#8A000A",
-  "navigationDividerColor": "#8A000A",
-  "navigationDividerColorDark": "#8A000A",
-  "backgroundColor": "#8A000A",
+  "themeColor": "#2B070D",
+  "themeColorDark": "#2B070D",
+  "navigationColor": "#1C0408",
+  "navigationColorDark": "#1C0408",
+  "navigationDividerColor": "#1C0408",
+  "navigationDividerColorDark": "#1C0408",
+  "backgroundColor": "#2B070D",
   "enableNotifications": false,
   "startUrl": "/kedai-rakdjat/",
   "iconUrl": "https://yance30.github.io/kedai-rakdjat/icon.png",
@@ -20,8 +20,8 @@
     "path": "C:/Users/yansg/kedai-rakdjat-signing/kedai-rakdjat.keystore",
     "alias": "kedai-rakdjat"
   },
-  "appVersionName": "1.0.1",
-  "appVersionCode": 2,
+  "appVersionName": "1.0.2",
+  "appVersionCode": 3,
   "shortcuts": [],
   "generatorApp": "bubblewrap-core",
   "webManifestUrl": "https://yance30.github.io/kedai-rakdjat/manifest.webmanifest",
@@ -40,5 +40,5 @@
   "additionalTrustedOrigins": [],
   "retainedBundles": [],
   "displayOverride": [],
-  "appVersion": "1.0.1"
+  "appVersion": "1.0.2"
 }
