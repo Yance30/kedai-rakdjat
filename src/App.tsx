@@ -5,6 +5,7 @@ import { SCHEMA_MISMATCH, startSync } from './sync';
 import { useWakeLock } from './wake-lock';
 import LowStockBanner from './components/LowStockBanner';
 import Splash from './components/Splash';
+import ErrorBoundary from './components/ErrorBoundary';
 import { dailySnapshot, requestPersistentStorage } from './backup';
 import CloudAccess from './components/CloudAccess';
 const CloudPortal = lazy(() => import('./screens/CloudPortal'));
@@ -211,6 +212,8 @@ export default function App() {
           </div>
         )}
         <div key={tab + (activeTable ?? '')} className="flex-1 min-h-0 kr-page">
+          {/* A crash in one page keeps the sidebar working; the key resets it when switching tabs. */}
+          <ErrorBoundary page>
           {tab === 'kasir' ? (
             <div className="h-full flex flex-col">
               {!activeTable && <LowStockBanner className="shrink-0 border-b px-6 py-2" onOpen={staff.role === 'owner' ? () => go('stok') : undefined} />}
@@ -251,6 +254,7 @@ export default function App() {
           ) : (
             <Settings staff={staff} />
           )}
+          </ErrorBoundary>
         </div>
       </main>
     </div>

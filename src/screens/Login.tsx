@@ -5,6 +5,7 @@ import { db } from '../db';
 import { haptic } from '../feedback';
 import type { Staff } from '../types';
 import Splash from '../components/Splash';
+import { versionLabel } from '../version';
 
 export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => void; onCloud: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -59,7 +60,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
       {intro && <Splash className="kr-intro absolute inset-0 z-50" />}
 
       {/* The photo fills the screen; the PIN card sits in the middle on every screen size. */}
-      <img src={`${import.meta.env.BASE_URL}login-bg.png`} alt="" className="absolute inset-0 w-full h-full object-cover" />
+      <img src={`${import.meta.env.BASE_URL}login-bg.webp`} alt="" className="absolute inset-0 w-full h-full object-cover" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/25 to-black/40" />
       <div className="relative h-full overflow-y-auto">
         <div className="min-h-full grid place-items-center p-4 sm:p-8">
@@ -118,6 +119,7 @@ export default function Login({ onLogin, onCloud }: { onLogin: (s: Staff) => voi
             </span>
           </div>
           <div className="text-center text-[11px] text-primary-bright font-semibold mt-3">Data transaksi tersimpan di perangkat ini</div>
+          <div className="text-center text-[10px] text-gray-400 mt-2">{versionLabel()}</div>
         </div>
         </div>
       </div>

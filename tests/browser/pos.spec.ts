@@ -282,3 +282,18 @@ test('tanpa meja: nama pelanggan, nomor antrean dan pisah bayar dengan sisa yang
   expect(await counts(page)).toEqual({ orders: 2, payments: 2, audit: 2 });
   expect(errors).toEqual([]);
 });
+test('halaman yang gagal dimuat tidak membuat layar putih, versi tampil di pengaturan',async({browser})=>{
+  // Without the service worker the request reaches the route, as for a code file removed by a new deploy.
+  const context=await browser.newContext({serviceWorkers:'block',viewport:{width:1280,height:900}});
+  const page=await context.newPage();
+  await page.route(/\/assets\/Sales-[^/]*\.js$/,route=>route.abort());
+  await setupOwner(page);
+  await page.getByRole('button',{name:'Laporan Penjualan',exact:true}).click();
+  await expect(page.getByRole('alert').filter({hasText:'Aplikasi baru saja diperbarui'})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Muat ulang',exact:true})).toBeVisible();
+  await page.screenshot({path:'test-results/error-boundary.png',animations:'disabled'});
+  // The sidebar still works: another page opens normally.
+  await page.getByRole('button',{name:'Pengaturan',exact:true}).click();
+  await expect(page.getByTestId('app-version')).toHaveText(/^Versi \d+\.\d+\.\d+ · /);
+  await context.close();
+});

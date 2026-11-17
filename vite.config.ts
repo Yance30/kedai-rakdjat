@@ -3,10 +3,19 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import basicSsl from '@vitejs/plugin-basic-ssl';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 
 // GitHub Pages serves the app under /<repo>/; local dev and tests keep the root path.
 export default defineConfig(({ mode }) => ({
   base: process.env.BASE_PATH || '/',
+  // Shown in Pengaturan and on the login card so the owner can tell which version a tablet runs.
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    __BUILD_TIME__: JSON.stringify(Date.now()),
+    __COMMIT__: JSON.stringify(process.env.GITHUB_SHA?.slice(0, 7) ?? 'lokal'),
+  },
   plugins: [
     // npm run dev:lan (mode "lan") serves a self-signed HTTPS certificate so tablets on the Wi-Fi can
     // log in: PIN hashing (crypto.subtle), Bluetooth printing and offline mode need a secure context.
@@ -35,7 +44,7 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         clientsClaim: true,
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,png,webp,svg,woff2}'],
       },
     }),
   ],

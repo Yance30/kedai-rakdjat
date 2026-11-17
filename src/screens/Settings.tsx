@@ -11,6 +11,7 @@ import StaffManager from '../components/StaffManager';
 import { rupiah } from '../money';
 import { pushAll } from '../sync';
 import type { Staff } from '../types';
+import { versionLabel } from '../version';
 
 function PinLockHistory() {
   const log = useLiveQuery(() => pinLockLog(), []) ?? [];
@@ -149,7 +150,8 @@ export default function Settings({ staff }: { staff: Staff }) {
 
   return (
     <div className="h-full overflow-y-auto p-6">
-      <h1 className="font-bold text-xl mb-6">Pengaturan</h1>
+      <h1 className="font-bold text-xl mb-1">Pengaturan</h1>
+      <p className="text-xs text-gray-500 mb-6" data-testid="app-version">{versionLabel()}</p>
       {msg && <p className="mb-4 text-sm text-primary-bright">{msg}</p>}
 
       {isOwner && (

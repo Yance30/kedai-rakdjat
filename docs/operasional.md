@@ -71,3 +71,11 @@ Jika database cloud belum memakai migrasi yang dibutuhkan versi aplikasi ini, si
 Di **Kelola Menu**, ketuk **Hapus** di baris menu. Menu yang belum pernah terjual dihapus beserta resepnya. Menu yang sudah pernah terjual diarsipkan, sehingga hilang dari kasir dan daftar, tetapi riwayat penjualan, laporan dan HPP tetap mencatatnya. Menu yang diarsipkan bisa dilihat lewat **Tampilkan menu diarsipkan**, lalu diaktifkan lagi melalui Edit.
 
 Di **Pengaturan → Staf & Akses Login**, ketuk **Hapus** di baris staf. Akun yang belum pernah dipakai dihapus. Staf yang pernah bertugas (shift, transaksi, diskon, pengeluaran atau stok) dinonaktifkan dan disembunyikan, agar namanya tetap tercatat di riwayat. Owner tidak dapat menghapus akunnya sendiri, dan minimal harus ada satu owner aktif. Penghapusan ikut tersinkron ke cloud saat akun cloud owner login.
+
+## Pembaruan aplikasi dan nomor versi
+
+Setiap push ke `main` di-deploy otomatis. Tablet memeriksa versi baru saat aplikasi dibuka dan setiap 30 menit selama online. Setelah versi baru selesai diunduh, muncul pita **Versi baru tersedia** di atas layar. Ketuk **Muat ulang** saat tidak sedang melayani pelanggan. Keranjang yang sedang diisi tetap tersimpan. Pita ini tidak muncul selama tablet offline.
+
+Nomor versi, waktu build dan kode commit tampil di bagian atas **Pengaturan** dan di bawah kotak login, misalnya `Versi 1.0.0 · 17 Nov 2026, 17.15 · a1b2c3d`. Gunakan untuk memastikan semua tablet sudah memakai versi yang sama.
+
+Jika satu halaman gagal ditampilkan, aplikasi menampilkan pesan dengan tombol **Muat ulang**, bukan layar putih. Menu samping tetap bisa dipakai dan data transaksi tetap tersimpan di tablet.
